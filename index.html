@@ -1515,13 +1515,13 @@ const NET = { room: null, user: null, db: null, sb: false, myId: null, myName: '
 
 // ── Supabase (voor de GitHub-versie). Vul de twee waarden in uit Supabase → Project Settings → API.
 //    De "anon"/"publishable" sleutel is bedoeld om publiek in een website te staan. Geen tabellen nodig: alleen Realtime.
-const SUPABASE_URL = '';
-const SUPABASE_ANON_KEY = '';
+const SUPABASE_URL = 'https://eofqpkjhonjvgbvnhbkh.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_fjCQAhY5S9V6OME6syAJaQ_8njv8K-e';
 const SB_COLORS = ['#3b82f6', '#e11d48', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
 // maakt van een Supabase Realtime-kanaal hetzelfde soort "room" als op claude.ai (presence, onPeers, on, emit, onConnection)
 async function supabaseRoom() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  let createClient; try { ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm')); } catch (e) { console.warn('supabase niet geladen', e); return null; }
+  let createClient; try { ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm')); } catch (e) { console.warn('supabase niet geladen', e); return null; }
   const me = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
   const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 20 } } });
   const ch = client.channel('polygon-bureau', { config: { presence: { key: me }, broadcast: { self: false } } });
