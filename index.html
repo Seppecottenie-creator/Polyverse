@@ -1509,8 +1509,22 @@ document.addEventListener('pointerlockchange', () => { locked = document.pointer
 let mouseDown = false;
 document.addEventListener('mousemove', e => { if (locked || (dragLook && mouseDown)) look(e.movementX, e.movementY); });
 cvs.addEventListener('mousedown', () => { mouseDown = true; if (started && !locked && !dragLook && !isTouch) tryLock(); }); addEventListener('mouseup', () => mouseDown = false);
-function look(dx, dy) { P.yaw -= dx * .0024; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * .0024)); }
-function tryLock() { try { const r = cvs.requestPointerLock(); if (r && r.catch) r.catch(() => { dragLook = true; }); } catch (e) { dragLook = true; } setTimeout(() => { if (!locked) dragLook = true; }, 400); }
+// muisbeweging zonder uitschieters: sommige browsers/muizen (vooral Chrome op Windows en touchpads) sturen in pointer lock af en toe
+// één bericht met een enorme sprong (honderden pixels, soms in de verkeerde richting). Bij recht omhoog of omlaag kijken voelt dat als een
+// omslaand beeld. Zulke sprongen worden genegeerd; gewone snelle bewegingen blijven werken.
+const LOOK = { avg: 6, n: 0 };
+function look(dx, dy) {
+  const m = Math.hypot(dx, dy);
+  if (m > 40 && m > LOOK.avg * 8) { LOOK.n++; if (LOOK.n < 3) return; }   // losse uitschieter overslaan (na 3 op rij is het echte beweging)
+  else LOOK.n = 0;
+  LOOK.avg += (Math.min(m, 400) - LOOK.avg) * .15;
+  P.yaw -= dx * .0024; P.pitch = Math.max(-1.42, Math.min(1.42, P.pitch - dy * .0024));
+}
+function tryLock() {   // ruwe muisbeweging (zonder versnelling van het besturingssysteem) waar de browser dat kan, anders gewone pointer lock
+  const plain = () => { try { const r = cvs.requestPointerLock(); if (r && r.catch) r.catch(() => { dragLook = true; }); } catch (e) { dragLook = true; } };
+  try { const r = cvs.requestPointerLock({ unadjustedMovement: true }); if (r && r.catch) r.catch(() => plain()); else if (!r) { } } catch (e) { plain(); }
+  setTimeout(() => { if (!locked) dragLook = true; }, 600);
+}
 const overlay = document.getElementById('overlay'), startBtn = document.getElementById('start');
 function showOverlay(paused) { overlay.hidden = false; startBtn.textContent = paused ? 'Verder wandelen' : 'Start de rondleiding'; }
 const isTouch = false;
