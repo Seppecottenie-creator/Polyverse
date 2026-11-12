@@ -1436,14 +1436,15 @@ const POST = (() => {
   const bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), .16, .4, 1.0); composer.addPass(bloom);
   composer.addPass(new OutputPass());
   const grade = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, vig: { value: .32 }, t: { value: 0 } },
+    uniforms: { tDiffuse: { value: null }, vig: { value: .32 }, t: { value: 0 }, night: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float vig; uniform float t; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float vig; uniform float t; uniform float night; varying vec2 vUv;
       float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + t) * 43758.5453); }
       void main(){ vec4 c = texture2D(tDiffuse, vUv); vec3 col = c.rgb;
         float l = dot(col, vec3(.2126, .7152, .0722)); col = mix(vec3(l), col, 1.16);                 // iets meer kleur
         col = col * vec3(1.015, 1.0, .985) + vec3(.004, .002, 0.);                                  // warme ondertoon
         col = mix(col, col * col * (3.0 - 2.0 * col), .32);                                          // zacht contrast
+        col = mix(col, vec3(dot(col, vec3(.2126, .7152, .0722))) * vec3(.80, 1.0, .93), night * .55);       // nacht: kil en flets
         vec2 d = vUv - .5; col *= 1.0 - vig * dot(d, d) * 1.6;                                        // vignet
         col += (h(vUv * 1024.0) - .5) * .012;                                                         // fijne korrel tegen banding
         gl_FragColor = vec4(col, c.a); }`
@@ -1452,6 +1453,7 @@ const POST = (() => {
 })();
 // omgevingslicht en weerkaatsingen: één keer een opname van het kantoor zelf maken (in plaats van een algemene studio-omgeving)
 function captureEnv() {
+  if (typeof NIGHT !== 'undefined' && NIGHT.on) return;
   try {
     const crt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType }), cc = new THREE.CubeCamera(.05, 120, crt);
     cc.position.set(8 * WS, 1.55 * WS, 6.6 * WS); scene.add(cc); const hid = [];
@@ -2127,7 +2129,7 @@ function frame() {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); sizeMap(); });
 window.__view = (x, z, yaw, pitch = 0) => { Object.assign(P, { x, z, yaw, pitch }); P.y = groundAt(x, z); started = true; overlay.hidden = true; };
 window.__third = (on) => { third = on; };
-window.__interact = () => interact(); window.__zb = () => ZB; window.__wpn = () => ({ ready: WPN.ready, cur: !!WPN.cur }); window.__camdbg = () => ({ parent: camera.parent && camera.parent.type, kids: camera.children.length, vis: camera.children.map(c => c.visible), near: camera.near }); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
+window.__interact = () => interact(); window.__zb = () => ZB; window.__night = () => NIGHT; window.__dbgN = () => { const L = []; scene.traverse(o => { if (o.isLight && o.intensity > 0 && o.visible) L.push(o.type + ':' + o.intensity.toFixed(2)); }); const mt = {}; scene.traverse(o => { if (o.isMesh && o.visible) { const m = [].concat(o.material)[0]; const k = m.type + (m.emissive && m.emissive.getHex() ? ' em' : '') + (m.envMap ? ' env' : '') + (m.lightMap ? ' lm' : ''); mt[k] = (mt[k] || 0) + 1; } }); const hs = []; scene.traverse(o => { if (o.isHemisphereLight) hs.push([o.parent && o.parent.type, o.intensity, o.color.getHexString(), scene.children.indexOf(o)]); }); return { hs, L, env: !!scene.environment, fog: scene.fog && scene.fog.type, mt }; }; window.__wpn = () => ({ ready: WPN.ready, cur: !!WPN.cur }); window.__camdbg = () => ({ parent: camera.parent && camera.parent.type, kids: camera.children.length, vis: camera.children.map(c => c.visible), near: camera.near }); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
 window.__cam = camera;
 window.__fake = (n) => { for (let i = 0; i < n; i++) { const r = makeRemote('fake' + i, (i + 1) % AVATARS.length, null); r.name = AVATARS[(i + 1) % AVATARS.length].label; r.color = ['#3b82f6', '#e11d48', '#16a34a', '#d97706', '#7c3aed', '#0891b2'][i % 6]; setTag(r); const cx = 8 + Math.cos(i) * 2, cz = 7 + Math.sin(i) * 2.2; let t = i; r.pos = { x: cx, y: 0, z: cz }; r.fake = (dt) => { t += dt * .35; r.tgt = { x: cx + Math.cos(t) * 1.2 * (i % 2 ? 1 : 0), y: 0, z: cz + Math.sin(t) * 1.2 * (i % 2 ? 1 : 0), yaw: i % 2 ? -t : i * .9 + 2.6, sp: i % 2 ? 1.5 : 0 }; }; if (i === 2) showBubble(r, 'Goeiemorgen! Koffie iemand?'); if (i === 4) r.avatar.userData.wave(); } renderOnline(); };
 window.__info = () => { let t = 0; scene.traverse(o => { if (o.isMesh && o.geometry) { const n = (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; t += o.isInstancedMesh ? n * o.count : n; } }); return { tris: Math.round(t), draws: renderer.info.render.calls }; };
@@ -2616,13 +2618,15 @@ const WPN = (() => {
   W.show = k => { for (const [n, w] of Object.entries(W.list)) w.holder.visible = n === k; W.cur = W.list[k] || null; if (W.cur) W.play('draw', 1.3); };
   W.hide = () => { for (const w of Object.values(W.list)) w.holder.visible = false; W.cur = null; };
   W.play = (what, ts = 1) => { const w = W.cur; if (!w) return 0; const a = w.A[w.d[what]]; if (!a) return 0; if (w.once && w.once !== a) w.once.stop(); a.reset(); a.timeScale = ts; a.setEffectiveWeight(1); a.play(); w.once = a; return a.getClip().duration / ts; };
-  W.update = dt => {
-    const w = W.cur; if (!w) return; w.mx.update(dt); if (w.once && !w.once.isRunning()) { w.once.stop(); w.once = null; }
-    w.g.scene.updateMatrixWorld(true); camera.updateMatrixWorld();
-    if (w.cam) _r.copy(w.cam.matrixWorld).multiply(ry90); else _r.makeTranslation(...w.d.eye).multiply(ryPi);   // oogpunt van het wapen
-    w.holder.matrix.copy(camera.matrixWorld).multiply(_m.copy(_r).invert()); w.holder.matrixWorldNeedsUpdate = true;
+  W.update = dt => { const w = W.cur; if (!w) return; w.mx.update(dt); if (w.once && !w.once.isRunning()) { w.once.stop(); w.once = null; } };
+  // vlak voor het tekenen: camera staat dan definitief; oogpunt gemeten met de houder op nul (anders schuift het beeld heen en weer)
+  W.place = () => {
+    const w = W.cur; if (!w) return; w.holder.matrix.identity(); w.holder.updateMatrixWorld(true); camera.updateMatrixWorld();
+    if (w.cam) _r.copy(w.cam.matrixWorld).multiply(ry90); else _r.makeTranslation(...w.d.eye).multiply(ryPi);
+    w.holder.matrix.copy(camera.matrixWorld).multiply(_m.copy(_r).invert()); w.holder.updateMatrixWorld(true);
   };
-  W.render = () => { if (!W.cur) return; sc.environment = scene.environment; const ac = renderer.autoClear; renderer.autoClear = false; renderer.clearDepth(); renderer.render(sc, camera); renderer.autoClear = ac; };
+  W.lights = { hemi: sc.children[0], dl };
+  W.render = () => { if (!W.cur) return; W.place(); sc.environment = scene.environment; const ac = renderer.autoClear; renderer.autoClear = false; renderer.clearDepth(); renderer.render(sc, camera); renderer.autoClear = ac; };
   return W;
 })();
 let ZCLIPS = null;
@@ -2630,6 +2634,120 @@ let ZMODELS = null; const zombieModels = () => ZMODELS || (ZMODELS = fetchGltfMu
 const zombieClips = () => ZCLIPS || (ZCLIPS = fetch(new URL('models/zombie.anim.json', location.href).href).then(r => r.ok ? r.json() : null).then(j => j && Object.fromEntries(Object.entries(j).map(([k, v]) => [k, THREE.AnimationClip.parse(v)]))).catch(() => null));
 // ═════════════════════════ ZOMBIE-AANVAL: E bij de garagepoort in de koer. Golven zombies komen langs de deuren binnen.
 //   Tijdelijke zombies = bleke versies van de personages; echte zombiemodellen en -animaties kunnen later in de plaats komen.
+// ── nacht voor de zombie-aanval: maan, mist, zaklamp, flikkerende lampen, spleten in de muren en enge geluiden
+const NIGHT = (() => {
+  const N = { on: false, saved: null, lights: [], t: 0 };
+  // spleten: elke lange muur krijgt om de ±3 m een gat waar zombies door kruipen (de speler niet)
+  const BREACH = [], RECTS = [...mapWalls, ...mapGlass];
+  const walls = RECTS.map(([a, b, c, d]) => ({ a, b, c, d, alongX: (b - a) >= (d - c) })).map(w => Object.assign(w, { len: w.alongX ? w.b - w.a : w.d - w.c, th: w.alongX ? w.d - w.c : w.b - w.a })).filter(w => w.th <= .45 && w.len >= 1.2).sort((p, q) => q.len - p.len);
+  for (const w of walls) {
+    const n = Math.max(1, Math.round(w.len / 2.6));
+    for (let k = 0; k < n; k++) {
+      const u = (w.alongX ? w.a : w.c) + (k + .5) * w.len / n; let lo = w.alongX ? w.c : w.a, hi = w.alongX ? w.d : w.b;
+      // hele muurpakket meenemen: aanliggende lagen (bekleding, glas) op dezelfde plaats
+      for (let it = 0; it < 3; it++) for (const [a, b, c, d] of RECTS) { const ua = w.alongX ? a : c, ub = w.alongX ? b : d, va = w.alongX ? c : a, vb = w.alongX ? d : b; if (u > ua - .05 && u < ub + .05 && vb > lo - .35 && va < hi + .35 && vb - va < .6) { lo = Math.min(lo, va); hi = Math.max(hi, vb); } }
+      if (hi - lo > .7) continue;
+      if (BREACH.some(o => o.alongX === w.alongX && Math.abs(o.u - u) < 1.0 && o.hi > lo - .1 && o.lo < hi + .1)) continue;
+      const m = (lo + hi) / 2, x = w.alongX ? u : m, z = w.alongX ? m : u;
+      BREACH.push({ u, lo, hi, x, z, alongX: w.alongX, th: hi - lo, x1: w.alongX ? u - .32 : lo - .3, x2: w.alongX ? u + .32 : hi + .3, z1: w.alongX ? lo - .3 : u - .32, z2: w.alongX ? hi + .3 : u + .32 });
+    }
+  }
+  N.BREACH = BREACH;
+  // gat in de muur: zwarte opening met gebroken randen en barsten
+  const holeTex = (() => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 320; const g = c.getContext('2d');
+    const pts = []; const cx = 128, cy = 205; for (let i = 0; i < 26; i++) { const an = i / 26 * Math.PI * 2, r = (.78 + Math.random() * .3); pts.push([cx + Math.cos(an) * 92 * r, Math.min(320, cy + Math.sin(an) * 120 * r)]); }
+    g.strokeStyle = 'rgba(30,22,18,.9)'; g.lineWidth = 2;
+    for (let i = 0; i < 9; i++) { const [px, py] = pts[Math.random() * pts.length | 0]; g.beginPath(); g.moveTo(px, py); let x = px, y = py; for (let s = 0; s < 4; s++) { x += (x - cx) * .18 + (Math.random() - .5) * 26; y += (y - cy) * .18 + (Math.random() - .5) * 26; g.lineTo(x, y); } g.stroke(); }
+    g.fillStyle = '#4a3a30'; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x + (x - cx) * .1, y + (y - cy) * .08) : g.moveTo(x + (x - cx) * .1, y + (y - cy) * .08)); g.closePath(); g.fill();
+    const gr = g.createRadialGradient(cx, cy, 10, cx, cy, 110); gr.addColorStop(0, '#000'); gr.addColorStop(.8, '#050302'); gr.addColorStop(1, '#140d09');
+    g.fillStyle = gr; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  const holes = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.05, 1.6), new THREE.MeshStandardMaterial({ map: holeTex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4 }), BREACH.length * 2);
+  { const o = new THREE.Object3D(); let n = 0;
+    for (const b of BREACH) for (const sd of [-1, 1]) {
+      const fx = b.alongX ? b.x : b.x + sd * (b.th / 2 + .02), fz = b.alongX ? b.z + sd * (b.th / 2 + .02) : b.z;
+      const gy = groundAt(fx + (b.alongX ? 0 : sd * .3), fz + (b.alongX ? sd * .3 : 0)) || 0;
+      o.position.set(fx, gy + .8, fz); o.rotation.set(0, b.alongX ? (sd > 0 ? 0 : Math.PI) : (sd > 0 ? Math.PI / 2 : -Math.PI / 2), 0); o.updateMatrix(); holes.setMatrixAt(n++, o.matrix);
+    }
+    holes.count = n; }
+  holes.visible = false; holes.frustumCulled = false; holes.userData.aoVis = false; WORLD.add(holes);
+  // nachthemel met sterren en maan
+  const sky = (() => {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 512);
+    gr.addColorStop(0, '#020308'); gr.addColorStop(.45, '#060a14'); gr.addColorStop(.52, '#0b1018'); gr.addColorStop(1, '#030405'); g.fillStyle = gr; g.fillRect(0, 0, 1024, 512);
+    for (let i = 0; i < 700; i++) { const y = Math.random() ** 1.6 * 250; g.fillStyle = `rgba(220,228,255,${.2 + Math.random() * .6})`; g.fillRect(Math.random() * 1024, y, Math.random() < .1 ? 2 : 1, Math.random() < .1 ? 2 : 1); }
+    const mx = 300, my = 120, mg = g.createRadialGradient(mx, my, 6, mx, my, 70); mg.addColorStop(0, 'rgba(200,215,240,.35)'); mg.addColorStop(1, 'rgba(200,215,240,0)'); g.fillStyle = mg; g.fillRect(mx - 70, my - 70, 140, 140);
+    g.fillStyle = '#d8e0ee'; g.beginPath(); g.arc(mx, my, 13, 0, 7); g.fill(); g.fillStyle = 'rgba(150,160,180,.5)'; g.beginPath(); g.arc(mx + 4, my - 3, 4, 0, 7); g.arc(mx - 5, my + 4, 3, 0, 7); g.fill();
+    const t = new THREE.CanvasTexture(c); t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  // lampen hier en daar (modeleenheden): kleur, sterkte, gedrag
+  const SPOTS_L = [
+    [3.1, 2.3, '#cfe3ff', 5, 'flikker'], [14.7, 2.3, '#ff2414', 4, 'puls'], [8.0, 11.6, '#ff2a18', 4, 'puls'], [13.4, 8.8, '#d6ecff', 4, 'flikker'],
+    [2.4, 8.8, '#74ff9a', 2.2, 'rustig'], [8.0, 7.3, '#ff8a3a', 3, 'kaars'], [10.0, -3.6, '#ffae55', 7, 'flikker'], [18.6, -4.2, '#ff2a18', 4, 'puls'], [8.0, 18.5, '#ffa040', 9, 'rustig'],
+  ];
+  const torch = new THREE.SpotLight('#ffe2bd', 0, 24, .44, .7, 1.25); torch.position.set(.18, -.12, .05); const tt = new THREE.Object3D(); tt.position.set(.05, -.1, -6); torch.target = tt;
+  // drone + gekreun
+  let drone = null;
+  function startDrone() {
+    try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); const t = AC.currentTime, g = AC.createGain(), f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.05, t + 3);
+      const os = [43, 43.6, 64.7].map(fr => { const o = AC.createOscillator(); o.type = 'sawtooth'; o.frequency.value = fr; o.connect(f); o.start(); return o; });
+      const lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = .09; lg.gain.value = 120; lfo.connect(lg).connect(f.frequency); lfo.start();
+      f.connect(g).connect(AC.destination); drone = { g, os: [...os, lfo] }; } catch (e) { }
+  }
+  function stopDrone() { if (!drone) return; try { const t = AC.currentTime; drone.g.gain.cancelScheduledValues(t); drone.g.gain.setValueAtTime(drone.g.gain.value, t); drone.g.gain.linearRampToValueAtTime(0, t + .8); drone.os.forEach(o => o.stop(t + .9)); } catch (e) { } drone = null; }
+  N.groan = (vol = .05) => {
+    try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); const t = AC.currentTime, d = .8 + Math.random() * .9, o = AC.createOscillator(), o2 = AC.createOscillator(), f = AC.createBiquadFilter(), g = AC.createGain(), f0 = 70 + Math.random() * 60;
+      o.type = 'sawtooth'; o2.type = 'square'; o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * (.6 + Math.random() * .3), t + d); o2.frequency.setValueAtTime(f0 * 1.51, t); o2.frequency.linearRampToValueAtTime(f0 * .8, t + d);
+      f.type = 'bandpass'; f.frequency.setValueAtTime(380 + Math.random() * 300, t); f.frequency.linearRampToValueAtTime(220, t + d); f.Q.value = 4;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .15); g.gain.linearRampToValueAtTime(vol * .7, t + d * .7); g.gain.linearRampToValueAtTime(0, t + d);
+      o.connect(f); o2.connect(f); f.connect(g).connect(AC.destination); o.start(t); o2.start(t); o.stop(t + d + .05); o2.stop(t + d + .05); } catch (e) { }
+  };
+  N.enable = () => {
+    if (N.on) return; N.on = true;
+    const all = []; scene.traverse(o => { if (o.isLight && o !== torch) all.push([o, o.intensity, o.color.clone(), o.visible]); });
+    let hemi = null; scene.traverse(o => { if (o.isHemisphereLight && !hemi) hemi = o; });
+    N.saved = { all, bg: scene.background, fog: scene.fog, env: scene.environment, hemi: hemi && [hemi.color.clone(), hemi.groundColor.clone()], wl: [W0.hemi.intensity, W0.dl.intensity, W0.dl.color.clone()], vig: POST && POST.grade && POST.grade.uniforms.vig.value };
+    for (const [o] of all) { if (o.isRectAreaLight || o.isPointLight || o.isSpotLight) o.intensity = 0; }
+    if (hemi) { hemi.color.set('#3c4d6e'); hemi.groundColor.set('#060708'); hemi.intensity = .16; }
+    sun.color.set('#8aa2d6'); sun.intensity = .32; fill.intensity = 0;
+    scene.background = sky; scene.fog = new THREE.FogExp2('#06080d', .075); scene.environment = null;
+    W0.hemi.intensity = .35; W0.dl.intensity = .7; W0.dl.color.set('#ffe2b8');
+    if (POST && POST.grade) { POST.grade.uniforms.vig.value = .85; POST.grade.uniforms.night.value = 1; }
+    const max = quality === 'laag' ? 5 : SPOTS_L.length;
+    for (const [x, z, col, I, mode] of SPOTS_L.slice(0, max)) {
+      const l = new THREE.PointLight(col, 0, 9, 1.8), y = (groundAt(x, z) || 0) + 2.55; l.position.set(x * WS, y * WS, z * WS);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(.05, 10, 8), new THREE.MeshBasicMaterial({ color: col })); bulb.position.copy(l.position); bulb.position.y += .12;
+      scene.add(l, bulb); N.lights.push({ l, bulb, I, mode, ph: Math.random() * 10, off: 0 });
+    }
+    camera.add(torch, tt); torch.intensity = 3.6;
+    holes.visible = true; startDrone(); SHADOW.force = true;
+  };
+  N.disable = () => {
+    if (!N.on) return; N.on = false; const s = N.saved;
+    for (const [o, I, c, v] of s.all) { o.intensity = I; o.color.copy(c); o.visible = v; }
+    let hemi = null; scene.traverse(o => { if (o.isHemisphereLight && !hemi) hemi = o; }); if (hemi && s.hemi) { hemi.color.copy(s.hemi[0]); hemi.groundColor.copy(s.hemi[1]); }
+    scene.background = s.bg; scene.fog = s.fog; scene.environment = s.env;
+    W0.hemi.intensity = s.wl[0]; W0.dl.intensity = s.wl[1]; W0.dl.color.copy(s.wl[2]);
+    if (POST && POST.grade) { POST.grade.uniforms.vig.value = s.vig; POST.grade.uniforms.night.value = 0; }
+    for (const L of N.lights) { scene.remove(L.l, L.bulb); L.bulb.geometry.dispose(); L.bulb.material.dispose(); L.l.dispose(); } N.lights = [];
+    camera.remove(torch, tt); torch.intensity = 0; holes.visible = false; stopDrone(); SHADOW.force = true;
+  };
+  N.update = dt => {
+    if (!N.on) return; N.t += dt;
+    for (const L of N.lights) {
+      let f = 1;
+      if (L.mode === 'flikker') { if (L.off > 0) { L.off -= dt; f = Math.random() < .3 ? .4 : .02; } else { f = .85 + Math.random() * .15; if (Math.random() < dt * .8) L.off = .05 + Math.random() * .5; } }
+      else if (L.mode === 'puls') f = .15 + .85 * Math.max(0, Math.sin(N.t * 2.2 + L.ph)) ** 3;
+      else if (L.mode === 'kaars') f = .75 + Math.sin(N.t * 9 + L.ph) * .1 + Math.random() * .15;
+      L.l.intensity = L.I * f; L.bulb.material.color.set(L.l.color).multiplyScalar(.15 + .85 * f);
+    }
+    torch.intensity = 3.6 * (Math.random() < .004 ? .2 : 1);
+  };
+  const W0 = WPN.lights;
+  return N;
+})();
 const ZB = (() => {
   const Z = { active: false, list: [], wave: 0, toSpawn: 0, spawnT: 0, score: 0, kills: 0, hp: 100, ammo: 12, mag: 12, reloadT: 0, fireT: 0, firing: false, gun: 'pistool', hurtT: 0, between: 0, gridT: 0, hud: null, prevThird: true };
   const SPAWNS = [[7.85, 15.6], [.66, -1.1], [9.1, -1.2], [16.3, -1.2], [20.5, -2.2]];
@@ -2638,6 +2756,8 @@ const ZB = (() => {
   function buildGrid() {
     G.block.fill(0); const pad = .18;
     for (const c of colliders) { if (c.on) continue; const i0 = Math.max(0, Math.floor((c.x1 - pad - G.x0) / G.s)), i1 = Math.min(G.w - 1, Math.floor((c.x2 + pad - G.x0) / G.s)), j0 = Math.max(0, Math.floor((c.z1 - pad - G.z0) / G.s)), j1 = Math.min(G.h - 1, Math.floor((c.z2 + pad - G.z0) / G.s)); for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) G.block[j * G.w + i] = 1; }
+    G.br = G.br || new Uint8Array(G.w * G.h); G.br.fill(0);
+    for (const b of NIGHT.BREACH) { const i0 = Math.max(0, Math.floor((b.x1 - G.x0) / G.s)), i1 = Math.min(G.w - 1, Math.floor((b.x2 - G.x0) / G.s)), j0 = Math.max(0, Math.floor((b.z1 - G.z0) / G.s)), j1 = Math.min(G.h - 1, Math.floor((b.z2 - G.z0) / G.s)); for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * G.w + i; if (G.block[k]) G.br[k] = 1; G.block[k] = 0; } }
   }
   const cell = (x, z) => [Math.floor((x - G.x0) / G.s), Math.floor((z - G.z0) / G.s)];
   function flow() {
@@ -2710,13 +2830,13 @@ const ZB = (() => {
   function setHud() { if (!Z.hud) return; $('zw').textContent = Z.wave; $('zs').textContent = Z.score; $('zl').textContent = Z.list.filter(z => !z.dead).length + Z.toSpawn; $('zh').style.width = Math.max(0, Z.hp) + '%'; $('za').textContent = Z.reloadT > 0 ? '…' : Z.ammo; $('zg').textContent = Z.gun === 'geweer' ? 'Geweer' : 'Pistool'; }
   // ── starten en stoppen
   function start() {
-    if (Z.active) return; if (SIT.seat) return; Z.active = true; Z.prevThird = third; third = false; buildGrid(); flow();
+    if (Z.active) return; if (SIT.seat) return; Z.active = true; Z.prevThird = third; third = false; buildGrid(); flow(); NIGHT.enable(); Z.groanT = 2;
     doors.forEach(d => { d.target = 1; }); Object.assign(Z, { wave: 0, score: 0, kills: 0, hp: 100, gun: 'pistool', mag: 12, ammo: 12, reloadT: 0, between: 1.5, toSpawn: 0 }); rifle.forEach(m => m.visible = false);
     gun.visible = !WPN.ready; WPN.load().then(() => { if (Z.active) { gun.visible = !WPN.ready; WPN.show(Z.gun); } }); zombieClips(); Z.hud = hud(); document.getElementById('cross').style.display = 'none'; setHud(); say('Zombie-aanval', 'ze komen langs de deuren binnen', 2.5); sfx(110, .8, 'sawtooth', .07, -50);
     if (!locked) tryLock();
   }
   function stop(showResult) {
-    if (!Z.active) return; Z.active = false; third = Z.prevThird; gun.visible = false; WPN.hide();
+    if (!Z.active) return; Z.active = false; third = Z.prevThird; gun.visible = false; WPN.hide(); NIGHT.disable();
     for (const z of Z.list) { z.gone = true; scene.remove(z.av); } Z.list = []; if (Z.hud) Z.hud.remove(); Z.hud = null; document.getElementById('cross').style.display = '';
     if (showResult) { SCORES.submit('zombies', Z.score); openGame(RESULT); }
   }
@@ -2745,6 +2865,8 @@ const ZB = (() => {
   // ── elke beeldwissel
   function update(dt) {
     if (!Z.active) return;
+    NIGHT.update(dt); Z.groanT -= dt;
+    if (Z.groanT <= 0) { Z.groanT = 1.2 + Math.random() * 2.5; let best = null, bd = 14; for (const z of Z.list) { if (z.dead) continue; const dd = Math.hypot(z.x - P.x, z.z - P.z); if (dd < bd && Math.random() < .6) { bd = dd; best = z; } } if (best) NIGHT.groan(.07 * (1 - bd / 14) + .01); }
     Z.fireT -= dt; if (Z.firing && Z.gun === 'geweer' && Z.fireT <= 0) shoot();
     if (Z.reloadT > 0) { Z.reloadT -= dt; if (Z.reloadT <= 0) { Z.ammo = Z.mag; setHud(); } }
     flash.visible = !WPN.ready && Z.fireT > (Z.gun === 'geweer' ? .07 : .15); WPN.update(dt); Z.kick = Math.max(0, (Z.kick || 0) - dt * 8);
@@ -2768,9 +2890,9 @@ const ZB = (() => {
       let vx = tx - z.x, vz = tz - z.z; const vl = Math.hypot(vx, vz) || 1; vx /= vl; vz /= vl;
       for (const o of Z.list) if (o !== z && !o.dead) { const dx = z.x - o.x, dz = z.z - o.z, dd = Math.hypot(dx, dz); if (dd < .55 && dd > 1e-3) { vx += dx / dd * (.55 - dd) * 2; vz += dz / dd * (.55 - dd) * 2; } }
       z.kb = (z.kb || 0) - dt; z.hitT -= dt; z.atk -= dt;
-      const busy = z.atkT > 0 || (real && z.hitT > 0), move = dP > .62 && !busy ? z.sp * (z.kb > 0 ? .25 : 1) * dt : 0;
+      const busy = z.atkT > 0 || (real && z.hitT > 0), inBr = ci >= 0 && cj >= 0 && ci < G.w && cj < G.h && G.br && G.br[cj * G.w + ci], move = dP > .62 && !busy ? z.sp * (z.kb > 0 ? .25 : 1) * (inBr ? .45 : 1) * dt : 0;
       z.x += vx * move; z.z += vz * move; const want = Math.atan2(-(P.x - z.x), -(P.z - z.z)); z.yaw += Math.atan2(Math.sin(want - z.yaw), Math.cos(want - z.yaw)) * Math.min(1, dt * 6);
-      av.position.set(z.x * WS, groundAt(z.x, z.z) * WS, z.z * WS); av.rotation.y = z.yaw;
+      z.crouch = (z.crouch || 0) + ((inBr ? 1 : 0) - (z.crouch || 0)) * Math.min(1, dt * 6); av.position.set(z.x * WS, groundAt(z.x, z.z) * WS, z.z * WS); av.rotation.y = z.yaw; av.rotation.x = z.crouch * .35;
       // aanval: animatie start, schade halverwege als je nog dichtbij staat
       if (dP < .75 && z.atk <= 0 && z.atkT <= 0) { z.atkT = 1.25; z.atk = 1.7; z.dmg = true; z.atkK = Math.random() < .5 ? 'attack' : 'attack2'; }
       if (z.atkT > 0) { z.atkT -= dt; if (z.dmg && z.atkT < .65) { z.dmg = false; if (dP < 1.0) { Z.hp -= (z.big ? 18 : 9) + Z.wave; Z.hurtT = .35; noise(.15, .1); sfx(90, .2, 'sawtooth', .06); setHud(); } } }
