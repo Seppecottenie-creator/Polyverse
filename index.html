@@ -81,7 +81,7 @@ const H = 3.0, SLAT = 2.5, HD = 13.31, HW = 15.7, WIN = 2.1;   // plafond, onder
 const SZ1 = 4.35, SZ2 = 9.35;                                   // latjesplafond loopt van kolomvlak tot kolomvlak
 const STREET = -0.4;                                            // stoep ligt 2 treden lager
 const WS = 1.2;                                                  // het gebouw wordt 20% groter getekend; personages blijven op echte maat
-const EYE = 1.58, R = 0.2 / WS;                                      // ooghoogte bij een lengte van 1,70 m
+const EYE = 1.74, R = 0.2 / WS;                                      // ooghoogte bij een lengte van 1,98 m
 
 // ───────────────────────── renderer / scene
 const app = document.getElementById('app');
@@ -1366,14 +1366,14 @@ function drawMap() {
 
 // ───────────────────────── personages (proefpersonages; later vervangen door de GLB-modellen + Mixamo-animaties)
 const AVATARS = [   // echte collega's (Meshy → automatisch gerigd op het Mixamo-skelet van personage 1); proef = reserve terwijl het model laadt
-  { glb: 'models/personage1.gltf.json', label: 'Seppe', skin: '#e9b99a', hair: '#b07a45', shirt: '#5f6670', pants: '#c3a27a', h: 1.80 },
-  { glb: 'models/ale.gltf.json', label: 'Ale', h: 1.80 },
-  { glb: 'models/jeroen.gltf.json', label: 'Jeroen', h: 1.80 },
-  { glb: 'models/odo.gltf.json', label: 'Odo', h: 1.80 },
-  { glb: 'models/steffi.gltf.json', label: 'Steffi', h: 1.80 },
-  { glb: 'models/stijn.gltf.json', label: 'Stijn', h: 1.80 },
-  { glb: 'models/marvin.gltf.json', label: 'Marvin', h: 1.80 },
-  { glb: 'models/lana.gltf.json', label: 'Lana', h: 1.80 },
+  { glb: 'models/personage1.gltf.json', label: 'Seppe', skin: '#e9b99a', hair: '#b07a45', shirt: '#5f6670', pants: '#c3a27a', h: 1.98 },
+  { glb: 'models/ale.gltf.json', label: 'Ale', h: 1.98 },
+  { glb: 'models/jeroen.gltf.json', label: 'Jeroen', h: 1.98 },
+  { glb: 'models/odo.gltf.json', label: 'Odo', h: 1.98 },
+  { glb: 'models/steffi.gltf.json', label: 'Steffi', h: 1.98 },
+  { glb: 'models/stijn.gltf.json', label: 'Stijn', h: 1.98 },
+  { glb: 'models/marvin.gltf.json', label: 'Marvin', h: 1.98 },
+  { glb: 'models/lana.gltf.json', label: 'Lana', h: 1.98 },
 ];
 const PROEF = { skin: '#e8c4a6', hair: '#3b2a20', style: 'short', shirt: '#8a8f96', pants: '#2b2f36', shoes: '#f1f1ee', h: 1.75 };
 // echte personages: GLB met skelet + animaties (idle, look, walk, wave, wave2), één keer geladen en per speler gekloond
@@ -1416,7 +1416,7 @@ function makeGlbAvatar(def) {
   root.userData.wave = () => ctl ? pend.fire() : stand.userData.wave();
   loadGlb(def.glb).then(g => {
     if (!g) return; const model = SkeletonUtils.clone(g.scene); model.rotation.y = Math.PI;
-    { model.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(model), k = (def.h || 1.8) / Math.max(.5, bb.max.y - bb.min.y); model.scale.multiplyScalar(k); model.position.y = -.035 * k; }
+    { model.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(model), k = (def.h || 1.98) / Math.max(.5, bb.max.y - bb.min.y); model.scale.multiplyScalar(k); model.position.y = -.035 * k; }
     model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; if (o.material) { o.material.envMapIntensity = .5; } } });
     root.remove(stand); root.add(model);
     const mx = new THREE.AnimationMixer(model), A = {};
@@ -1520,7 +1520,7 @@ let camD = 2.6;
 function placeCamera(bob) {
   const wx = P.x * WS, wy = P.y * WS, wz = P.z * WS;
   if (!third) { camera.position.set(wx, wy + EYE + bob, wz); camera.rotation.set(P.pitch, P.yaw, 0); return; }
-  const cp = Math.cos(P.pitch), dx = -Math.sin(P.yaw) * cp, dy = Math.sin(P.pitch), dz = -Math.cos(P.yaw) * cp, ty = wy + 1.55;
+  const cp = Math.cos(P.pitch), dx = -Math.sin(P.yaw) * cp, dy = Math.sin(P.pitch), dz = -Math.cos(P.yaw) * cp, ty = wy + 1.7;
   let want = 2.8; for (let s = .25; s <= 2.8; s += .08) if (camBlocked(P.x - dx * s / WS, P.z - dz * s / WS)) { want = Math.max(.25, s - .18); break; }
   camD = want < camD ? want : camD + (want - camD) * .12;
   const cx = wx - dx * camD, cz = wz - dz * camD; let cy = ty - dy * camD;
