@@ -851,19 +851,18 @@ bx(6.8, 6.85, 1.1, 1.92, 6.0, 7.4, M.black); bx(6.85, 6.853, 1.13, 1.89, 6.03, 7
 
 // ───────────────────────── lounge
 bx(7.3, 10.3, 0, .012, 5.25, 9.55, M.wool, { cast: false });
-// beige hoeksofa (foto 3124, plan): lang deel noord-zuid met de rug naar de werkplekken (oost), chaise longue aan de noordkant zonder rug,
-// brede blokarmleuning aan de zuidkant
+// grijze hoekzetel: het echte model (zetel.max → models/zetel.gltf.json) wordt na het opbouwen ingeladen;
+// tot dan (of als laden mislukt) staat deze eenvoudige versie er. Lang deel noord-zuid met de rug naar de werkplekken (oost), korte poot aan de noordkant.
+const SOFA_PROC = grp();
 {
-  const fab = std('#c3b9a7', 1), fabD = std('#b8ae9b', 1), base = std('#b3ac9f', 1);
-  const X1 = 9.55, X2 = 10.42, Z1 = 5.0, Z2 = 8.1, CX = 7.97, CZ = 5.88;
-  bx(X1, X2, .13, .4, Z1, Z2, base); bx(CX, X1, .13, .4, Z1, CZ, base);                                      // onderbak lang deel + chaise
-  bx(X2 - .22, X2, .4, .8, Z1, Z2 - .24, fab);                                                                // vaste rug (oost)
-  bx(X1, X2, .13, .62, Z2 - .24, Z2, fabD);                                                                   // blokarmleuning (zuid)
-  for (const [z1, z2] of [[Z1 + .02, 6.0], [6.03, 6.98], [7.01, Z2 - .26]]) { const c = at(rbox(null, X2 - .22 - X1 - .02, z2 - z1, .14, .05, fab, .02), (X1 + X2 - .22) / 2, .4, (z1 + z2) / 2); c.updateMatrixWorld(); statics.push(c); }
-  { const c = at(rbox(null, X1 - CX - .02, CZ - Z1 - .04, .14, .05, fab, .02), (CX + X1) / 2, .4, (Z1 + CZ) / 2); c.updateMatrixWorld(); statics.push(c); }   // chaise-kussen
-  for (const [z1, z2] of [[Z1 + .03, 6.0], [6.03, 6.98], [7.01, Z2 - .27]]) { const c = at(rbox(null, .22, z2 - z1, .44, .07, fabD, .03), X2 - .33, .5, (z1 + z2) / 2); c.rotation.z = -.12; c.updateMatrixWorld(); statics.push(c); }   // losse rugkussens
-  for (const [x, z] of [[X1 + .04, Z1 + .04], [X2 - .04, Z1 + .04], [X1 + .04, Z2 - .04], [X2 - .04, Z2 - .04], [CX + .04, Z1 + .04], [CX + .04, CZ - .04]]) bx(x - .02, x + .02, 0, .13, z - .02, z + .02, M.black);
-  addCol(X1, X2, Z1, Z2); addCol(CX, X1, Z1, CZ); mapFurn.push([X1, X2, Z1, Z2], [CX, X1, Z1, CZ]);
+  const fab = std('#c3b9a7', 1), fabD = std('#b8ae9b', 1), base = std('#b3ac9f', 1), P = SOFA_PROC;
+  const X1 = 9.62, X2 = 10.42, Z1 = 5.0, Z2 = 8.12, CX = 8.02, CZ = 5.79;
+  lb(P, X1, X2, .13, .4, Z1, Z2, base); lb(P, CX, X1, .13, .4, Z1, CZ, base);
+  lb(P, X2 - .2, X2, .4, .74, Z1, Z2, fab); lb(P, CX, X1, .4, .74, Z1, Z1 + .2, fab);
+  for (const [z1, z2] of [[Z1 + .22, 6.2], [6.23, 7.2], [7.23, Z2 - .02]]) at(rbox(P, X2 - .22 - X1 - .02, z2 - z1, .14, .05, fab, .02), (X1 + X2 - .22) / 2, .4, (z1 + z2) / 2);
+  at(rbox(P, X1 - CX - .02, CZ - Z1 - .24, .14, .05, fab, .02), (CX + X1) / 2, .4, (Z1 + .2 + CZ) / 2);
+  for (const [x, z] of [[X1 + .04, Z2 - .04], [X2 - .04, Z1 + .04], [X2 - .04, Z2 - .04], [CX + .04, Z1 + .04], [CX + .04, CZ - .04]]) lb(P, x - .02, x + .02, 0, .13, z - .02, z + .02, M.black);
+  scene.add(P); addCol(X1, X2, Z1, Z2); addCol(CX, X1, Z1, CZ); mapFurn.push([X1, X2, Z1, Z2], [CX, X1, Z1, CZ]);
 }
 // donkerblauwe fluwelen sofa: ronde rug die vloeiend overgaat in de armleuningen, schuine houten pootjes
 {
@@ -1253,6 +1252,12 @@ Object.assign(fill.shadow.camera, { left: -17, right: 17, top: 18, bottom: -18, 
 const WORLD = new THREE.Group(); WORLD.name = 'bureau'; WORLD.scale.setScalar(WS);
 for (const o of [...scene.children]) { if (o.isPointLight) o.distance *= WS; WORLD.add(o); }
 scene.add(WORLD);
+{ const fab = M.sofa.clone(), fabD = M.sofa.clone(); fab.color.set('#a8a398'); fabD.color.set('#968f84');
+  fetchGltf('models/zetel.gltf.json').then(g => {
+    const mm = { stof: fab, stofD: fabD, poot: M.black };
+    g.scene.traverse(o => { if (o.isMesh) { o.material = mm[o.material.name] || fab; o.castShadow = true; o.receiveShadow = true; } });
+    WORLD.add(g.scene); SOFA_PROC.removeFromParent();
+  }).catch(e => console.warn('hoekzetel niet geladen', e)); }
 const toW = (x, y, z) => [x * WS, y * WS, z * WS];
 
 // ───────────────────────── beeldkwaliteit (G wisselt, F toont beelden per seconde)
