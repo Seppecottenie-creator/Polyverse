@@ -9,7 +9,7 @@ Een 3D-wandeling door het Polygon-bureau, gebouwd met [three.js](https://threejs
 | W A S D of pijltjes | lopen |
 | muis | rondkijken (klik eerst in het beeld) |
 | Shift | sneller lopen |
-| E | deur openen of sluiten |
+| E | deur openen of sluiten, gaan zitten of opstaan |
 | V | camera achter je personage of door je ogen |
 | Enter of T | chatten |
 | X | zwaaien |
