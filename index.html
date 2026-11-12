@@ -59,10 +59,10 @@ html,body{height:100%;margin:0;overflow:hidden;background:#bcd9e6;font-family:va
     <kbd>W A S D</kbd><span>lopen (of pijltjes)</span>
     <kbd>muis</kbd><span>rondkijken</span>
     <kbd>Shift</kbd><span>sneller lopen</span>
-    <kbd>E</kbd><span>deur openen of sluiten, gaan zitten of opstaan, spelen</span>
+    <kbd>E</kbd><span>deur openen of sluiten, gaan zitten of opstaan<span data-spel>, spelen</span></span>
     <kbd>M</kbd><span>kaart groter of kleiner</span>
-    <kbd>K</kbd><span>kaarten, als je aan de eettafel zit</span>
-    <kbd>E</kbd><span>bij de garagepoort in de koer: zombie-aanval</span>
+    <kbd data-spel>K</kbd><span data-spel>kaarten, als je aan de eettafel zit</span>
+    <kbd data-spel>E</kbd><span data-spel>bij de garagepoort in de koer: zombie-aanval</span>
     <kbd>Esc</kbd><span>pauze</span>
   </div>
   <button id="start" type="button" disabled>Laden…</button>
@@ -1520,7 +1520,7 @@ function groundAt(x, z) {
 }
 const keys = new Set(); let locked = false, dragLook = false, started = false, mapBig = false;
 addEventListener('keydown', e => { if (GM.active) { if (e.code === 'Escape') closeGame(); else if (GM.active.key) GM.active.key(e, true); if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].includes(e.code) && !(e.target && e.target.tagName === 'INPUT')) e.preventDefault(); return; }
-  if (e.code === 'KeyK' && SIT.seat && SIT.seat.cards && SIT.phase === 3) { openGame(MENU); return; }
+  if (e.code === 'KeyK' && DEV.on && SIT.seat && SIT.seat.cards && SIT.phase === 3) { openGame(MENU); return; }
   keys.add(e.code); if (e.code === 'KeyE' && !e.repeat) interact(); if (e.code === 'KeyM') { mapBig = !mapBig; sizeMap(); } });
 addEventListener('keyup', e => { if (GM.active) { if (GM.active.key) GM.active.key(e, false); return; } keys.delete(e.code); });
 addEventListener('blur', () => keys.clear());
@@ -2114,7 +2114,7 @@ function frame() {
   placeCamera(third ? 0 : Math.sin(t0) * .025);
   const nd = findDoor(), ns = findSeat(), ndd = nd ? Math.hypot(nd.cx - P.x, nd.cz - P.z) : 1e9;
   const nsp = findSpot();
-  if (SIT.seat) { hintEl.style.display = SIT.phase === 3 ? 'block' : 'none'; hintEl.innerHTML = '<b>E</b>opstaan (of wandel weg)' + (SIT.seat.cards ? ' · <b>K</b>kaarten' : ''); }
+  if (SIT.seat) { hintEl.style.display = SIT.phase === 3 ? 'block' : 'none'; hintEl.innerHTML = '<b>E</b>opstaan (of wandel weg)' + (SIT.seat.cards && DEV.on ? ' · <b>K</b>kaarten' : ''); }
   else if (nsp && nsp.d < ndd && (!ns || nsp.d < ns.d)) { hintEl.style.display = 'block'; hintEl.innerHTML = `<b>E</b>${nsp.s.label}`; }
   else if (ns && ns.d < ndd) { hintEl.style.display = 'block'; hintEl.innerHTML = `<b>E</b>gaan zitten: ${SEAT_LABEL[ns.s.kind] || 'stoel'}`; }
   else { hintEl.style.display = nd ? 'block' : 'none'; if (nd) hintEl.innerHTML = `<b>E</b>${nd.target ? 'sluiten' : 'openen'}: ${nd.name}`; }
@@ -2133,7 +2133,14 @@ window.__openAll = () => doors.forEach(d => { d.target = 1; d.t = 1; });
 if (IS_PHONE) { startBtn.textContent = 'Alleen op pc'; document.getElementById('loading').textContent = 'Polyverse werkt voorlopig alleen op een computer met toetsenbord en muis. Open de link op je pc.'; }
 else { startBtn.disabled = false; startBtn.textContent = 'Start'; document.getElementById('loading').textContent = 'Klik op start en daarna in het beeld om rond te kijken.'; }
 // ═════════════════════════ SPELLETJES — basis: spelpaneel, geluid, scores en ranglijsten, plekken in het kantoor
+// Spellen zijn voorlopig enkel zichtbaar voor Seppe: op claude.ai voor de eigenaar van de pagina, op GitHub op een toestel
+// waar je één keer de link met ?spellen=aan opent (uitzetten met ?spellen=uit).
+const DEV = { on: false };
+try { const q = new URLSearchParams(location.search).get('spellen'); if (q === 'aan') localStorage.setItem('pv-spellen', '1'); if (q === 'uit') localStorage.removeItem('pv-spellen'); DEV.on = localStorage.getItem('pv-spellen') === '1'; } catch (e) { }
+{ const chk = setInterval(() => { if (NET.user && NET.user.isOwner) { clearInterval(chk); Promise.resolve(NET.user.isOwner()).then(o => { if (o) { DEV.on = true; showGameHelp(); } }).catch(() => { }); } }, 1000); setTimeout(() => clearInterval(chk), 30000); }
+function showGameHelp() { document.querySelectorAll('[data-spel]').forEach(e => e.style.display = DEV.on ? '' : 'none'); }
 const GM = { active: null };
+showGameHelp();
 { const st = document.createElement('style'); st.textContent = `
 #gm{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(20,18,16,.55);font-family:var(--display);color:var(--ink)}
 #gm[hidden]{display:none!important}
@@ -2227,6 +2234,7 @@ const KV = {
 // ── plekken waar je met E iets start
 const SPOTS = [];
 function findSpot() {
+  if (!DEV.on) return null;
   const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 1e9;
   for (const s of SPOTS) { const d = Math.hypot(s.x - P.x, s.z - P.z), tx = s.tx - P.x, tz = s.tz - P.z, td = Math.hypot(tx, tz); if (d < s.r && d < bd && (tx * fx + tz * fz) / (td || 1) > .45) { best = s; bd = d; } }   // binnen bereik en kijkend naar het voorwerp
   return best && { s: best, d: bd };
