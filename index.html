@@ -62,6 +62,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:#bcd9e6;font-family:va
     <kbd>E</kbd><span>deur openen of sluiten, gaan zitten of opstaan, spelen</span>
     <kbd>M</kbd><span>kaart groter of kleiner</span>
     <kbd>K</kbd><span>kaarten, als je aan de eettafel zit</span>
+    <kbd>E</kbd><span>bij de garagepoort in de koer: zombie-aanval</span>
     <kbd>Esc</kbd><span>pauze</span>
   </div>
   <button id="start" type="button" disabled>Laden…</button>
@@ -1485,7 +1486,7 @@ addEventListener('resize', resizeFx);
 const SHADOW = { t: 0, force: 40, slow: 0 }; renderer.shadowMap.autoUpdate = false;
 function shadowTick(dt) {
   SHADOW.t += dt; SHADOW.slow += dt;
-  const moving = (third && myAvatar.visible) || NET.remotes.size > 0 || !!SIT.seat || doors.some(d => d.t > 0 && d.t < 1);
+  const moving = (third && myAvatar.visible) || NET.remotes.size > 0 || !!SIT.seat || doors.some(d => d.t > 0 && d.t < 1) || (typeof ZB !== 'undefined' && ZB.active);
   if (SHADOW.force > 0 || (moving && SHADOW.t > (quality === 'hoog' ? .05 : .12)) || SHADOW.slow > 3) { renderer.shadowMap.needsUpdate = true; SHADOW.t = 0; if (SHADOW.slow > 3) SHADOW.slow = 0; if (SHADOW.force > 0) SHADOW.force--; }
 }
 function renderFrame(dt) {
@@ -1583,6 +1584,7 @@ function findSeat() {
   return best && { s: best, d: bd };
 }
 function interact() {
+  if (typeof ZB !== 'undefined' && ZB.active) return;
   if (SIT.seat) { standUp(); return; }
   const nd = findDoor(), ns = findSeat(), sp = typeof findSpot === 'function' ? findSpot() : null, dd = nd ? Math.hypot(nd.cx - P.x, nd.cz - P.z) : 1e9;
   if (sp && sp.d < dd && (!ns || sp.d < ns.d)) { sp.s.act(); return; }
@@ -1732,7 +1734,7 @@ function makeGlbAvatar(def) {
     // vast punt aan de voeten: hoogte van enkel- en teenbot boven de zool, gemeten in de rusthouding
     model.updateMatrixWorld(true); bb = new THREE.Box3().setFromObject(model); const feet = [];
     for (const sd of ['Left', 'Right']) for (const n of ['Foot', 'ToeBase']) { const b = B(sd + n); if (b) feet.push([b, wp(b).y - bb.min.y]); }
-    const hips = B('Hips'), rest = hips ? hips.position.clone() : null; root.userData.head = B('Head');
+    const hips = B('Hips'), rest = hips ? hips.position.clone() : null; root.userData.head = B('Head'); root.userData.B = B; root.userData.model = model;
     root.remove(stand); root.add(model);
     const mx = new THREE.AnimationMixer(model), A = {}; let Z = null, O = null;
     for (const c of g.animations) { const a = mx.clipAction(c); A[c.name] = a; a.play(); a.setEffectiveWeight(0); }
@@ -1799,6 +1801,7 @@ function makeGlbAvatar(def) {
       const an = sa.phase === 'down' ? sstep(1.35, 2.05, sa.t) : sa.phase === 'seated' ? 1 : sa.phase === 'up' ? 1 - sstep(.15, .7, sa.t) : 0;
       if (an > 0 && hips) off += (sa.S + clear - (wp(hips, V0).y - ry + off)) * an;
       model.position.y = off;
+      if (root.userData.post) root.userData.post(dt);
     };
   });
   return root;
@@ -2063,7 +2066,7 @@ chatIn.addEventListener('keyup', e => e.stopPropagation());
 function wave() { if (NET.room && NET.connected) NET.room.emit('emote', { e: 'wave' }).catch(() => myAvatar.userData.wave()); else myAvatar.userData.wave(); }
 addEventListener('keydown', e => {
   if (document.activeElement === chatIn || !started || !overlay.hidden || GM.active) return;
-  if (e.code === 'KeyV') { third = !third; try { localStorage.setItem('bureau3d-view', third ? '0' : '1'); } catch (er) { } }
+  if (e.code === 'KeyV' && !(typeof ZB !== 'undefined' && ZB.active)) { third = !third; try { localStorage.setItem('bureau3d-view', third ? '0' : '1'); } catch (er) { } }
   if (e.code === 'KeyX') wave();
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); }
 });
@@ -2086,7 +2089,7 @@ function frame() {
     P.x += (fx * f + rx * r) * sp; P.z += (fz * f + rz * r) * sp; collide();
     t0 += l > .1 ? dt * (run ? 11 : 8) : 0;
   }
-  updateSit(dt); updateChairs(dt);
+  updateSit(dt); updateChairs(dt); if (typeof ZB !== 'undefined' && started && overlay.hidden && !GM.active) ZB.update(dt);
   const v = SIT.seat && SIT.phase >= 2 && SIT.phase <= 4 ? 0 : Math.hypot(P.x - px, P.z - pz) * WS / Math.max(dt, 1e-4); mySpeed += (v - mySpeed) * Math.min(1, dt * 12);
   P.y += (groundAt(P.x, P.z) - P.y) * Math.min(1, dt * 10);
   for (const d of doors) { const k = d.target ? 1 : 0; d.t += Math.sign(k - d.t) * Math.min(Math.abs(k - d.t), dt * 1.6); const e = d.t * d.t * (3 - 2 * d.t); d.pivot.rotation.y = d.closed + (d.open - d.closed) * e; }
@@ -2122,7 +2125,7 @@ function frame() {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); sizeMap(); });
 window.__view = (x, z, yaw, pitch = 0) => { Object.assign(P, { x, z, yaw, pitch }); P.y = groundAt(x, z); started = true; overlay.hidden = true; };
 window.__third = (on) => { third = on; };
-window.__interact = () => interact(); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
+window.__interact = () => interact(); window.__zb = () => ZB; window.__camdbg = () => ({ parent: camera.parent && camera.parent.type, kids: camera.children.length, vis: camera.children.map(c => c.visible), near: camera.near }); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
 window.__cam = camera;
 window.__fake = (n) => { for (let i = 0; i < n; i++) { const r = makeRemote('fake' + i, (i + 1) % AVATARS.length, null); r.name = AVATARS[(i + 1) % AVATARS.length].label; r.color = ['#3b82f6', '#e11d48', '#16a34a', '#d97706', '#7c3aed', '#0891b2'][i % 6]; setTag(r); const cx = 8 + Math.cos(i) * 2, cz = 7 + Math.sin(i) * 2.2; let t = i; r.pos = { x: cx, y: 0, z: cz }; r.fake = (dt) => { t += dt * .35; r.tgt = { x: cx + Math.cos(t) * 1.2 * (i % 2 ? 1 : 0), y: 0, z: cz + Math.sin(t) * 1.2 * (i % 2 ? 1 : 0), yaw: i % 2 ? -t : i * .9 + 2.6, sp: i % 2 ? 1.5 : 0 }; }; if (i === 2) showBubble(r, 'Goeiemorgen! Koffie iemand?'); if (i === 4) r.avatar.userData.wave(); } renderOnline(); };
 window.__info = () => { let t = 0; scene.traverse(o => { if (o.isMesh && o.geometry) { const n = (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; t += o.isInstancedMesh ? n * o.count : n; } }); return { tris: Math.round(t), draws: renderer.info.render.calls }; };
@@ -2562,6 +2565,134 @@ for (const s of SEATS) if (s.chair && s.cx > 5 && s.cx < 10 && s.cz > .9 && s.cz
   document.querySelectorAll('#avrow [data-av]').forEach(b => { const i = +b.dataset.av, a = AVATARS[i]; b.innerHTML = `<i style="background:linear-gradient(145deg,${SB_COLORS[i % SB_COLORS.length]},#1d2030)">${a.label[0]}</i><span>${a.label}</span>`; });
   const lab = document.getElementById('avlabel'); if (lab) lab.textContent = 'Kies je personage';
 }
+// ═════════════════════════ ZOMBIE-AANVAL: E bij de garagepoort in de koer. Golven zombies komen langs de deuren binnen.
+//   Tijdelijke zombies = bleke versies van de personages; echte zombiemodellen en -animaties kunnen later in de plaats komen.
+const ZB = (() => {
+  const Z = { active: false, list: [], wave: 0, toSpawn: 0, spawnT: 0, score: 0, kills: 0, hp: 100, ammo: 12, mag: 12, reloadT: 0, fireT: 0, firing: false, gun: 'pistool', hurtT: 0, between: 0, gridT: 0, hud: null, prevThird: true };
+  const SPAWNS = [[7.85, 15.6], [.66, -1.1], [9.1, -1.2], [16.3, -1.2], [20.5, -2.2]];
+  // ── looprooster: vrije cellen van 25 cm; afstandsveld vanaf de speler (breadth-first), zombies volgen de daling
+  const G = { x0: -4, z0: -7.2, s: .25, w: 104, h: 114 }; G.block = new Uint8Array(G.w * G.h); G.dist = new Float32Array(G.w * G.h);
+  function buildGrid() {
+    G.block.fill(0); const pad = .18;
+    for (const c of colliders) { if (c.on) continue; const i0 = Math.max(0, Math.floor((c.x1 - pad - G.x0) / G.s)), i1 = Math.min(G.w - 1, Math.floor((c.x2 + pad - G.x0) / G.s)), j0 = Math.max(0, Math.floor((c.z1 - pad - G.z0) / G.s)), j1 = Math.min(G.h - 1, Math.floor((c.z2 + pad - G.z0) / G.s)); for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) G.block[j * G.w + i] = 1; }
+  }
+  const cell = (x, z) => [Math.floor((x - G.x0) / G.s), Math.floor((z - G.z0) / G.s)];
+  function flow() {
+    G.dist.fill(1e9); const [pi, pj] = cell(P.x, P.z); if (pi < 0 || pj < 0 || pi >= G.w || pj >= G.h) return;
+    const q = new Int32Array(G.w * G.h); let h = 0, t = 0; const k0 = pj * G.w + pi; G.dist[k0] = 0; q[t++] = k0;
+    while (h < t) { const k = q[h++], i = k % G.w, j = (k / G.w) | 0, d = G.dist[k];
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const nk = nj * G.w + ni; if (G.block[nk]) continue; if (di && dj && (G.block[j * G.w + ni] || G.block[nj * G.w + i])) continue; const nd = d + (di && dj ? 1.414 : 1); if (nd < G.dist[nk]) { G.dist[nk] = nd; q[t++] = nk; } } }
+  }
+  // ── wapen voor de camera
+  const gun = new THREE.Group(); gun.visible = false; scene.add(camera); camera.add(gun);
+  const gm = (c, r = .5, m = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m, depthTest: false });
+  const part = (w, h, d, x, y, z, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.renderOrder = 999; gun.add(m); return m; };
+  const gBody = gm('#2a2c30', .45, .6), gGrip = gm('#18191b', .8), gAcc = gm('#c47a2c', .4, .3);
+  part(.045, .06, .26, 0, 0, 0, gBody); part(.03, .03, .1, 0, .01, -.17, gBody); part(.04, .1, .05, 0, -.07, .07, gGrip); part(.012, .016, .012, 0, .04, -.1, gAcc); part(.012, .012, .02, 0, .04, .1, gAcc);
+  const rifle = [part(.05, .07, .22, 0, -.005, .2, gGrip), part(.03, .08, .04, 0, -.07, -.06, gBody)]; rifle.forEach(m => m.visible = false);
+  const flash = new THREE.Mesh(new THREE.PlaneGeometry(.12, .12), new THREE.MeshBasicMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,240,200,1)'); gr.addColorStop(.3, 'rgba(255,170,60,.9)'); gr.addColorStop(1, 'rgba(255,120,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })(), transparent: true, depthTest: false, blending: THREE.AdditiveBlending }));
+  flash.position.set(0, .01, -.25); flash.renderOrder = 1000; flash.visible = false; gun.add(flash);
+  gun.position.set(.17, -.15, -.36);
+  // ── zombie aanmaken (personage + bleke huid + armen vooruit)
+  const ZTINT = ['#c3cdb4', '#b9c6ad', '#cbd1bd'];
+  function spawn() {
+    const [sx, sz] = SPAWNS[Math.random() * SPAWNS.length | 0], big = Z.wave >= 5 && Math.random() < .12, fast = Z.wave >= 3 && Math.random() < .25 + Z.wave * .02;
+    const av = makeAvatar(AVATARS[Math.random() * AVATARS.length | 0]); scene.add(av); av.rotation.order = 'YXZ';
+    const z = { av, x: sx + (Math.random() - .5) * .6, z: sz + (Math.random() - .5) * .6, yaw: 0, hp: (2 + Math.floor(Z.wave / 2)) * (big ? 3 : 1), sp: (fast ? 1.35 : .62 + Z.wave * .05) * (big ? .8 : 1), big, atk: 0, dead: 0, flash: 0, tinted: false };
+    if (big) av.scale.setScalar(1.25);
+    av.userData.post = () => { const B = av.userData.B; if (!B || z.dead) return; for (const sd of ['Left', 'Right']) { const a = B(sd + 'Arm'), f = B(sd + 'ForeArm'), h = B(sd + 'Hand'); if (a && f && h) { const fw = V(-Math.sin(z.yaw), -.15, -Math.cos(z.yaw)); zaim(a, f, fw); zaim(f, h, fw); } } };
+    Z.list.push(z);
+  }
+  const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+  function zaim(b, c, dir) { b.getWorldPosition(_a); c.getWorldPosition(_b); _b.sub(_a).normalize(); _q.setFromUnitVectors(_b, dir.clone().normalize()); b.getWorldQuaternion(_q2); b.parent.getWorldQuaternion(_q3).invert(); b.quaternion.copy(_q3.multiply(_q.multiply(_q2))); b.updateMatrixWorld(true); }
+  function tint(z) { const m = z.av.userData.model; if (!m || z.tinted) return; z.tinted = true; const col = new THREE.Color(ZTINT[Math.random() * 3 | 0]); m.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.color.multiply(col); o.material.emissive = new THREE.Color('#0d1a08'); z.mat = z.mat || []; z.mat.push(o.material); } }); }
+  // ── HUD
+  function hud() {
+    const h = document.createElement('div'); h.id = 'zhud'; h.innerHTML = `<style>
+#zhud{position:fixed;inset:0;pointer-events:none;font-family:var(--display);color:#f3efe7;z-index:4}
+#zhud .top{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px}
+#zhud .pill{background:rgba(16,18,24,.62);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 14px;font-weight:700;font-size:15px}
+#zhud .pill small{display:block;font:500 11px var(--mono);color:#a9a69f;letter-spacing:.08em;text-transform:uppercase}
+#zhud .hp{position:absolute;left:16px;bottom:16px;width:260px}#zhud .bar{height:12px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:6px}#zhud .bar i{display:block;height:100%;background:linear-gradient(90deg,#ff5a5a,#ffb547);transition:width .2s}
+#zhud .ammo{position:absolute;right:16px;bottom:16px;text-align:right}#zhud .ammo b{font-size:30px}
+#zhud .msg{position:absolute;top:30%;left:50%;transform:translateX(-50%);font:800 44px var(--display);text-shadow:0 4px 24px rgba(0,0,0,.6);letter-spacing:-.01em;text-align:center}
+#zhud .msg small{display:block;font:600 16px var(--display);color:#ffb547;margin-top:6px}
+#zhud .hurt{position:absolute;inset:0;box-shadow:inset 0 0 160px rgba(200,0,0,.75);opacity:0;transition:opacity .15s}
+#zhud .xh{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+</style><div class="hurt"></div><div class="xh"></div><div class="top"><div class="pill"><small>Golf</small><span id="zw">1</span></div><div class="pill"><small>Score</small><span id="zs">0</span></div><div class="pill"><small>Zombies</small><span id="zl">0</span></div></div>
+<div class="hp pill"><small>Gezondheid</small><div class="bar"><i id="zh" style="width:100%"></i></div></div><div class="ammo pill"><small id="zg">Pistool</small><b id="za">12</b><span style="color:#a9a69f"> / ∞</span><div style="font:500 11px var(--mono);color:#a9a69f">klik = schieten · R = herladen · Backspace = stoppen</div></div><div class="msg" id="zm"></div>`;
+    document.body.appendChild(h); return h;
+  }
+  const $ = id => Z.hud && Z.hud.querySelector('#' + id);
+  function say(t, sub = '', dur = 2.2) { const m = $('zm'); if (!m) return; m.innerHTML = t + (sub ? `<small>${sub}</small>` : ''); clearTimeout(say.t); say.t = setTimeout(() => { if ($('zm')) $('zm').innerHTML = ''; }, dur * 1000); }
+  function setHud() { if (!Z.hud) return; $('zw').textContent = Z.wave; $('zs').textContent = Z.score; $('zl').textContent = Z.list.filter(z => !z.dead).length + Z.toSpawn; $('zh').style.width = Math.max(0, Z.hp) + '%'; $('za').textContent = Z.reloadT > 0 ? '…' : Z.ammo; $('zg').textContent = Z.gun === 'geweer' ? 'Geweer' : 'Pistool'; }
+  // ── starten en stoppen
+  function start() {
+    if (Z.active) return; if (SIT.seat) return; Z.active = true; Z.prevThird = third; third = false; buildGrid(); flow();
+    doors.forEach(d => { d.target = 1; }); Object.assign(Z, { wave: 0, score: 0, kills: 0, hp: 100, gun: 'pistool', mag: 12, ammo: 12, reloadT: 0, between: 1.5, toSpawn: 0 }); rifle.forEach(m => m.visible = false);
+    gun.visible = true; Z.hud = hud(); { const o = document.getElementById('online'); if (o) o.style.visibility = 'hidden'; } document.getElementById('cross').style.display = 'none'; setHud(); say('Zombie-aanval', 'ze komen langs de deuren binnen', 2.5); sfx(110, .8, 'sawtooth', .07, -50);
+    if (!locked) tryLock();
+  }
+  function stop(showResult) {
+    if (!Z.active) return; Z.active = false; third = Z.prevThird; gun.visible = false;
+    for (const z of Z.list) scene.remove(z.av); Z.list = []; if (Z.hud) Z.hud.remove(); Z.hud = null; { const o = document.getElementById('online'); if (o) o.style.visibility = ''; } document.getElementById('cross').style.display = '';
+    if (showResult) { SCORES.submit('zombies', Z.score); openGame(RESULT); }
+  }
+  const RESULT = { open(p) { p.insertAdjacentHTML('beforeend', `<h2>Je bent opgegeten</h2><div style="display:flex;gap:28px;flex-wrap:wrap"><div><div class="muted">Score</div><div style="font:800 48px var(--display)">${Z.score}</div><div class="muted">Golf ${Z.wave} · ${Z.kills} zombies neergeschoten</div><div style="margin-top:14px"><button class="b" id="zr">Opnieuw</button><button class="b alt" id="zq">Stoppen</button></div></div><div id="zlb" style="min-width:240px"></div></div>`); SCORES.render(p.querySelector('#zlb'), 'zombies', 'Zombie-aanval · ranglijst'); p.querySelector('#zr').onclick = () => { closeGame(true); start(); }; p.querySelector('#zq').onclick = () => closeGame(); }, key() { } };
+  // ── schieten
+  const hitWall = (x0, z0, x1, z1) => { for (const [a, b, c, d] of mapWalls) { let t0 = 0, t1 = 1; const dx = x1 - x0, dz = z1 - z0; for (const [p, q] of [[-dx, x0 - a], [dx, b - x0], [-dz, z0 - c], [dz, d - z0]]) { if (p === 0) { if (q < 0) { t0 = 2; break; } } else { const r = q / p; if (p < 0) t0 = Math.max(t0, r); else t1 = Math.min(t1, r); } } if (t0 <= t1 && t0 < 1 && t1 > 0) return true; } return false; };
+  function shoot() {
+    if (Z.reloadT > 0) return; if (Z.ammo <= 0) { reload(); return; }
+    Z.ammo--; Z.fireT = Z.gun === 'geweer' ? .11 : .2; flash.visible = true; flash.rotation.z = Math.random() * 3; Z.kick = 1; noise(.09, .16); sfx(160, .08, 'square', .05, -100);
+    const o = camera.getWorldPosition(new THREE.Vector3()), d = camera.getWorldDirection(new THREE.Vector3()); let best = null, bt = 1e9, head = false;
+    for (const z of Z.list) {
+      if (z.dead) continue; const cx = z.x * WS, cz = z.z * WS, r = .32 * (z.big ? 1.25 : 1), H = 1.95 * (z.big ? 1.25 : 1);
+      const ox = o.x - cx, oz = o.z - cz, a = d.x * d.x + d.z * d.z, b = 2 * (ox * d.x + oz * d.z), c = ox * ox + oz * oz - r * r, disc = b * b - 4 * a * c; if (disc < 0) continue;
+      const t = (-b - Math.sqrt(disc)) / (2 * a); if (t < 0 || t > bt) continue; const y = o.y + d.y * t - P.y * WS; if (y < 0 || y > H) continue;
+      bt = t; best = z; head = y > H * .8;
+    }
+    if (best && hitWall(o.x / WS, o.z / WS, best.x, best.z)) best = null;
+    if (best) { best.hp -= head ? 2 : 1; best.flash = .12; best.kb = .12; sfx(head ? 900 : 520, .06, 'square', .05); if (best.hp <= 0) kill(best, head); }
+    if (Z.ammo === 0) setTimeout(reload, 150); setHud();
+  }
+  function reload() { if (Z.reloadT > 0 || Z.ammo === Z.mag) return; Z.reloadT = Z.gun === 'geweer' ? 1.6 : 1.2; sfx(300, .05); setTimeout(() => sfx(420, .05), 500); setHud(); }
+  function kill(z, head) { z.dead = 1e-3; Z.kills++; Z.score += Math.round((10 + (head ? 5 : 0)) * (1 + Z.wave * .25) * (z.big ? 3 : 1)); sfx(140, .4, 'sawtooth', .05, -80); setHud(); }
+  document.addEventListener('mousedown', e => { if (!Z.active || !locked || e.button !== 0) return; Z.firing = true; if (Z.fireT <= 0) shoot(); });
+  addEventListener('mouseup', () => { Z.firing = false; });
+  addEventListener('keydown', e => { if (!Z.active || GM.active) return; if (e.code === 'KeyR') reload(); if (e.code === 'Backspace') { e.preventDefault(); stop(false); } });
+  // ── elke beeldwissel
+  function update(dt) {
+    if (!Z.active) return;
+    Z.fireT -= dt; if (Z.firing && Z.gun === 'geweer' && Z.fireT <= 0) shoot();
+    if (Z.reloadT > 0) { Z.reloadT -= dt; if (Z.reloadT <= 0) { Z.ammo = Z.mag; setHud(); } }
+    flash.visible = Z.fireT > (Z.gun === 'geweer' ? .07 : .15); Z.kick = Math.max(0, (Z.kick || 0) - dt * 8);
+    gun.position.set(.17, -.15 + Math.sin(performance.now() / 300) * .003 * Math.min(1, mySpeed), -.36 + Z.kick * .04); gun.rotation.x = Z.kick * .12 + (Z.reloadT > 0 ? .6 : 0); rifle.forEach(m => m.visible = Z.gun === 'geweer');
+    // golven
+    const alive = Z.list.filter(z => !z.dead).length;
+    if (!Z.toSpawn && !alive) { Z.between -= dt; if (Z.between <= 0) { Z.wave++; Z.toSpawn = 3 + Z.wave * 3; Z.between = 4; if (Z.wave > 1) Z.score += Z.wave * 25; if (Z.wave === 4 && Z.gun !== 'geweer') { Z.gun = 'geweer'; Z.mag = 30; Z.ammo = 30; say('Golf ' + Z.wave, 'je vond een automatisch geweer: hou de muis ingedrukt'); } else say('Golf ' + Z.wave, Z.wave >= 5 ? 'er lopen ook grote zombies rond' : Z.wave >= 3 ? 'sommige zombies lopen hard' : ''); setHud(); } }
+    if (Z.toSpawn > 0 && alive < 10) { Z.spawnT -= dt; if (Z.spawnT <= 0) { spawn(); Z.toSpawn--; Z.spawnT = Math.max(.45, 1.6 - Z.wave * .1); setHud(); } }
+    Z.gridT -= dt; if (Z.gridT <= 0) { flow(); Z.gridT = .3; }
+    // zombies
+    for (const z of Z.list) {
+      const av = z.av; tint(z);
+      if (z.dead) { z.dead += dt; av.rotation.x = -Math.min(1, z.dead / .55) * Math.PI / 2 * .95; av.position.y = P.y * WS - Math.max(0, z.dead - 1.6) * .5; av.userData.anim(dt, 0); continue; }
+      let tx = P.x, tz = P.z; const [ci, cj] = cell(z.x, z.z), dP = Math.hypot(P.x - z.x, P.z - z.z);
+      if (dP > .9 && ci >= 0 && cj >= 0 && ci < G.w && cj < G.h && G.dist[cj * G.w + ci] < 1e8) { let bd = G.dist[cj * G.w + ci], bi = ci, bj = cj; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const v = G.dist[nj * G.w + ni]; if (v < bd) { bd = v; bi = ni; bj = nj; } } tx = G.x0 + (bi + .5) * G.s; tz = G.z0 + (bj + .5) * G.s; }
+      let vx = tx - z.x, vz = tz - z.z; const vl = Math.hypot(vx, vz) || 1; vx /= vl; vz /= vl;
+      for (const o of Z.list) if (o !== z && !o.dead) { const dx = z.x - o.x, dz = z.z - o.z, dd = Math.hypot(dx, dz); if (dd < .55 && dd > 1e-3) { vx += dx / dd * (.55 - dd) * 2; vz += dz / dd * (.55 - dd) * 2; } }
+      const slow = z.kb > 0 ? .25 : 1; z.kb = (z.kb || 0) - dt; const move = dP > .62 ? z.sp * slow * dt : 0;
+      z.x += vx * move; z.z += vz * move; const want = Math.atan2(-(P.x - z.x), -(P.z - z.z)); z.yaw += Math.atan2(Math.sin(want - z.yaw), Math.cos(want - z.yaw)) * Math.min(1, dt * 6);
+      av.position.set(z.x * WS, groundAt(z.x, z.z) * WS, z.z * WS); av.rotation.y = z.yaw; av.userData.anim(dt, move > 0 ? z.sp * WS * .9 : 0);
+      if (z.mat) { const f = z.flash > 0 ? 1 : 0; for (const m of z.mat) m.emissive.setRGB(.02 + f * .6, .045 * (1 - f), .01 * (1 - f)); } z.flash -= dt;
+      if (dP < .75) { z.atk -= dt; if (z.atk <= 0) { z.atk = 1.1; Z.hp -= (z.big ? 18 : 9) + Z.wave; Z.hurtT = .35; noise(.15, .1); sfx(90, .2, 'sawtooth', .06); setHud(); } }
+    }
+    Z.list = Z.list.filter(z => { if (z.dead > 3.2) { scene.remove(z.av); return false; } return true; });
+    Z.hurtT -= dt; const hurt = Z.hud && Z.hud.querySelector('.hurt'); if (hurt) hurt.style.opacity = Math.max(0, Z.hurtT * 2.5) + (Z.hp < 30 ? .25 : 0);
+    if (Z.hp <= 0) stop(true);
+  }
+  SPOTS.push({ x: 21.6, z: -2.0, tx: 23.6, tz: -2.0, r: 1.8, label: 'zombie-aanval starten (garagepoort)', act: start });
+  return { Z, update, start, stop, get active() { return Z.active; } };
+})();
 frame();
 </script>
 

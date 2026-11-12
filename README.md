@@ -64,6 +64,8 @@ Zonder ingevulde Supabase-gegevens start het spel als solo-wandeling.
 - **Whiteboard** (E in het sas): tekenen met de muis; iedereen ziet de tekening en ze blijft bewaard.
 - **Kaarten** (ga aan de eettafel zitten en druk op K): blackjack en patience.
 
+- **Zombie-aanval** (E bij de garagepoort in de koer): golven zombies komen langs de deuren binnen. Klik = schieten, R = herladen, Backspace = stoppen. Vanaf golf 4 heb je een automatisch geweer.
+
 Elk spel toont zijn eigen ranglijst.
 
 ### Ranglijsten en whiteboard bewaren op GitHub Pages
