@@ -945,6 +945,7 @@ const rail = (x1, x2, zc) => { bx(x1, x2, 2.9, 2.93, zc - .015, zc + .015, M.whi
 for (const [x, w] of [[2.08, .45], [5.47, .45], [7.68, .45], [10.03, .45], [11.9, .4], [14.89, .45], [15.4, .42], [17.32, .1]]) curtain(x, .1, w);
 rail(2.0, 6.0, .12); rail(7.6, 10.5, .12); rail(11.9, 18.0, .12);
 
+const EXTRA_PENDANT = [];
 // ───────────────────────── middenblok, tv, arcade
 bx(5.65, 6.8, 0, SLAT - .002, 5.85, 7.55, M.walnut, { col: true });
 bx(6.8, 6.85, 1.1, 1.92, 6.0, 7.4, M.black); bx(6.85, 6.853, 1.13, 1.89, 6.03, 7.37, M.screenOff, { cast: false });
@@ -1010,7 +1011,7 @@ function pendant(x, z, y, kind) {
   place(g, x, y, z);
 }
 pendant(8.6, 6.6, 1.95, 0); pendant(9.15, 7.2, 1.85, 1); pendant(8.45, 7.75, 2.05, 2);
-for (const [x, z] of [[8.9, 7.0], [8.9, 7.8]]) { const l = new THREE.PointLight('#ffb35c', 4.5, 7, 2); l.position.set(x, 1.7, z); scene.add(l); }
+for (const [x, z] of [[8.9, 7.0], [8.9, 7.8]]) { const l = new THREE.PointLight('#ffb35c', 4.5, 7, 2); l.position.set(x, 1.7, z); scene.add(l); EXTRA_PENDANT.push(l); }
 
 // ───────────────────────── inkom: terrazzo blok met POLYGON-logo, planten
 bx(6.5, 9.2, 0, .96, 10.38, 10.8, M.terr, { col: true });
@@ -1074,8 +1075,9 @@ bx(-.75, -.2, .65, .95, .02, .4, M.ceramic, { col: true });
 { const m = mk(new THREE.CircleGeometry(.85, 24), M.palmRug, null, { cast: false }); m.rotation.x = -Math.PI / 2; m.position.set(-1.7, .006, 3.05); m.updateMatrixWorld(); statics.push(m); }
 
 radiatorBox(-2.0, -1.2, 4.3, 4.44, .1, .65);
-const lightIn = (x, y, z, i, c = '#fff1dd', d = 6) => { const l = new THREE.PointLight(c, i, d, 2); l.position.set(x, y, z); scene.add(l); };
-lightIn(-1.7, 2.3, 3.0, 2.4); lightIn(-2.5, 2.3, .8, 1.2); lightIn(-1.42, 2.3, .8, 1.2); lightIn(.73, 2.3, 1.5, 1.6); lightIn(18.9, 2.6, 2.2, 1.2);
+const EXTRA_LIGHTS = [];
+const lightIn = (x, y, z, i, c = '#fff1dd', d = 6, extra = false) => { const l = new THREE.PointLight(c, i, d, 2); l.position.set(x, y, z); scene.add(l); if (extra) EXTRA_LIGHTS.push(l); };
+lightIn(-1.7, 2.3, 3.0, 2.4); lightIn(-2.5, 2.3, .8, 1.2, undefined, 6, true); lightIn(-1.42, 2.3, .8, 1.2, undefined, 6, true); lightIn(.73, 2.3, 1.5, 1.6); lightIn(18.9, 2.6, 2.2, 1.2, undefined, 6, true);
 for (const [x, z] of [[-2.6, 3.0], [-1.0, 3.0], [-2.5, .8], [-1.42, .8], [.73, .8], [.73, 2.2], [-.45, .8]]) { const d = mk(new THREE.CylinderGeometry(.05, .05, .01, 12), M.led, null, { cast: false }); d.position.set(x, 2.495, z); d.updateMatrixWorld(); statics.push(d); }
 // sas: notelaren gang naar de achterdeur
 { bx(1.375, 1.4, .9, 2.0, .7, 2.5, M.alu); bx(1.37, 1.375, .93, 1.97, .73, 2.47, std('#f7f7f4', .25)); bx(1.33, 1.375, .88, .9, .8, 2.4, M.alu); }   // whiteboard
@@ -1333,7 +1335,8 @@ function worldUV(g, s) {
 function mergeAll() {
   const buckets = new Map();
   const detailMeshes = [];
-  for (const m of statics) { const k = m.material.uuid + (m.castShadow ? 'c' : '') + (m.receiveShadow ? 'r' : '') + (m.userData.det ? 'd' : ''); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(m); }
+  const _cb = new THREE.Box3(), _cc = new THREE.Vector3();
+  for (const m of statics) { _cb.setFromObject(m).getCenter(_cc); const k = m.material.uuid + (m.castShadow ? 'c' : '') + (m.receiveShadow ? 'r' : '') + (m.userData.det ? 'd' : '') + '|' + Math.floor(_cc.x / 8) + ',' + Math.floor(_cc.z / 8); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(m); }
   for (const list of buckets.values()) {
     const mat = list[0].material; const geos = [];
     for (const m of list) {
@@ -1369,15 +1372,17 @@ scene.add(WORLD);
   fetchGltf('models/zetel.gltf.json').then(g => {
     const mm = { stof: fab, stofD: fabD, poot: M.black };
     g.scene.traverse(o => { if (o.isMesh) { o.material = mm[o.material.name] || fab; o.castShadow = true; o.receiveShadow = true; } });
-    WORLD.add(g.scene); SOFA_PROC.removeFromParent();
+    WORLD.add(g.scene); SOFA_PROC.removeFromParent(); if (typeof SHADOW !== 'undefined') SHADOW.force = 5;
   }).catch(e => console.warn('hoekzetel niet geladen', e)); }
 const toW = (x, y, z) => [x * WS, y * WS, z * WS];
 
 // ───────────────────────── beeldkwaliteit (G wisselt, F toont beelden per seconde)
-const QUAL = { hoog: { pr: 1.75, sun: 4096, fill: 2048, det: true }, normaal: { pr: 1.25, sun: 2048, fill: 1024, det: true }, laag: { pr: .9, sun: 1024, fill: 0, det: false } };
+const QUAL = { hoog: { pr: 1.5, sun: 4096, fill: 2048, det: true }, normaal: { pr: 1, sun: 2048, fill: 0, det: true }, laag: { pr: .8, sun: 1024, fill: 0, det: false } };
 // voorlopig enkel pc: aanraakschermen (bv. laptops met touchscreen) krijgen gewoon de pc-besturing; op gsm en tablet start het spel niet
 const IS_PHONE = /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let quality = 'hoog';
+try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'), gpu = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+  if (/Intel|UHD|Iris|Mali|Adreno|PowerVR|Radeon\(TM\) Graphics|Vega \d+ Graphics|SwiftShader|llvmpipe/i.test(gpu)) quality = 'normaal'; } catch (e) { }
 try { const q = localStorage.getItem('bureau3d-q'); if (QUAL[q]) quality = q; } catch (e) { }
 function setQuality(k) {
   quality = k; const q = QUAL[k];
@@ -1461,7 +1466,13 @@ const QFX = { hoog: { ao: true, bloom: true, area: true, post: true }, normaal: 
 let dynScale = 1, fpsAvg = 60;
 function applyFx() {
   const f = QFX[quality] || QFX.hoog; POST.on = f.post; POST.ao.enabled = f.ao; POST.bloom.enabled = f.bloom;
-  if (WINLIGHTS[0].visible !== f.area) { WINLIGHTS.forEach(l => l.visible = f.area); scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => m.needsUpdate = true); }); }
+  // lichtbronnen per stand (een ander aantal lichten vraagt één keer nieuwe shaders)
+  const areaOn = i => f.area && (quality === 'hoog' || i === 0 || i === 2 || i === 4), extraOn = quality === 'hoog';
+  let changed = false;
+  WINLIGHTS.forEach((l, i) => { if (l.visible !== areaOn(i)) { l.visible = areaOn(i); changed = true; } });
+  for (const l of [...EXTRA_LIGHTS, ...EXTRA_PENDANT]) if (l.visible !== extraOn) { l.visible = extraOn; changed = true; }
+  if (changed) scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => m.needsUpdate = true); });
+  SHADOW.force = 20;
   resizeFx();
 }
 function resizeFx() {
@@ -1470,11 +1481,19 @@ function resizeFx() {
 }
 const _sq = setQuality; setQuality = k => { _sq(k); dynScale = 1; applyFx(); };
 addEventListener('resize', resizeFx);
+// schaduwen enkel opnieuw berekenen als er iets beweegt (personages, deuren, stoelen); het gebouw zelf staat stil
+const SHADOW = { t: 0, force: 40, slow: 0 }; renderer.shadowMap.autoUpdate = false;
+function shadowTick(dt) {
+  SHADOW.t += dt; SHADOW.slow += dt;
+  const moving = (third && myAvatar.visible) || NET.remotes.size > 0 || !!SIT.seat || doors.some(d => d.t > 0 && d.t < 1);
+  if (SHADOW.force > 0 || (moving && SHADOW.t > (quality === 'hoog' ? .05 : .12)) || SHADOW.slow > 3) { renderer.shadowMap.needsUpdate = true; SHADOW.t = 0; if (SHADOW.slow > 3) SHADOW.slow = 0; if (SHADOW.force > 0) SHADOW.force--; }
+}
 function renderFrame(dt) {
+  shadowTick(dt);
   // automatisch bijsturen: onder ±40 beelden/s eerst de resolutie omlaag, daarboven weer omhoog
   fpsAvg += (1 / Math.max(dt, 1e-3) - fpsAvg) * Math.min(1, dt * 1.5);
   renderFrame.t = (renderFrame.t || 0) + dt;
-  if (renderFrame.t > 2) { renderFrame.t = 0; const ns = fpsAvg < 40 ? Math.max(.6, dynScale - .1) : fpsAvg > 56 ? Math.min(1, dynScale + .05) : dynScale; if (ns !== dynScale) { dynScale = ns; resizeFx(); } }
+  if (renderFrame.t > 2) { renderFrame.t = 0; const ns = fpsAvg < 45 ? Math.max(.55, dynScale - .1) : fpsAvg > 57 ? Math.min(1, dynScale + .05) : dynScale; if (ns !== dynScale) { dynScale = ns; resizeFx(); } }
   if (POST.on) { POST.grade.uniforms.t.value = (POST.grade.uniforms.t.value + .37) % 100; POST.composer.render(dt); } else renderer.render(scene, camera);
 }
 applyFx();
@@ -1508,7 +1527,7 @@ const cvs = renderer.domElement;
 document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === cvs; if (!locked && started && !dragLook && !GM.active) showOverlay(true); });
 let mouseDown = false;
 document.addEventListener('mousemove', e => { if (locked || (dragLook && mouseDown)) look(e.movementX, e.movementY); });
-cvs.addEventListener('mousedown', () => { mouseDown = true; if (started && !locked && !dragLook && !isTouch) tryLock(); }); addEventListener('mouseup', () => mouseDown = false);
+cvs.addEventListener('mousedown', () => { mouseDown = true; if (started && !locked && !dragLook && !isTouch && !(typeof GM !== 'undefined' && GM.active)) tryLock(); }); addEventListener('mouseup', () => mouseDown = false);
 // muisbeweging zonder uitschieters: sommige browsers/muizen (vooral Chrome op Windows en touchpads) sturen in pointer lock af en toe
 // één bericht met een enorme sprong (honderden pixels, soms in de verkeerde richting). Bij recht omhoog of omlaag kijken voelt dat als een
 // omslaand beeld. Zulke sprongen worden genegeerd; gewone snelle bewegingen blijven werken.
@@ -1521,10 +1540,12 @@ function look(dx, dy) {
   P.yaw -= dx * .0024; P.pitch = Math.max(-1.42, Math.min(1.42, P.pitch - dy * .0024));
 }
 function tryLock() {   // ruwe muisbeweging (zonder versnelling van het besturingssysteem) waar de browser dat kan, anders gewone pointer lock
-  const plain = () => { try { const r = cvs.requestPointerLock(); if (r && r.catch) r.catch(() => { dragLook = true; }); } catch (e) { dragLook = true; } };
+  const plain = () => { try { const r = cvs.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (e) { } };
   try { const r = cvs.requestPointerLock({ unadjustedMovement: true }); if (r && r.catch) r.catch(() => plain()); else if (!r) { } } catch (e) { plain(); }
-  setTimeout(() => { if (!locked) dragLook = true; }, 600);
 }
+if (!('requestPointerLock' in HTMLElement.prototype)) dragLook = true;   // enkel als de browser het echt niet kan
+{ const st = document.createElement('style'); st.textContent = 'body.locked, body.locked #app canvas{cursor:none}'; document.head.appendChild(st); }
+document.addEventListener('pointerlockchange', () => document.body.classList.toggle('locked', document.pointerLockElement === cvs));
 const overlay = document.getElementById('overlay'), startBtn = document.getElementById('start');
 function showOverlay(paused) { overlay.hidden = false; startBtn.textContent = paused ? 'Verder wandelen' : 'Start de rondleiding'; }
 const isTouch = false;
