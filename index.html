@@ -1257,7 +1257,9 @@ const toW = (x, y, z) => [x * WS, y * WS, z * WS];
 
 // ───────────────────────── beeldkwaliteit (G wisselt, F toont beelden per seconde)
 const QUAL = { hoog: { pr: 1.75, sun: 4096, fill: 2048, det: true }, normaal: { pr: 1.25, sun: 2048, fill: 1024, det: true }, laag: { pr: .9, sun: 1024, fill: 0, det: false } };
-let quality = matchMedia('(pointer:coarse)').matches ? 'normaal' : 'hoog';
+// voorlopig enkel pc: aanraakschermen (bv. laptops met touchscreen) krijgen gewoon de pc-besturing; op gsm en tablet start het spel niet
+const IS_PHONE = /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let quality = 'hoog';
 try { const q = localStorage.getItem('bureau3d-q'); if (QUAL[q]) quality = q; } catch (e) { }
 function setQuality(k) {
   quality = k; const q = QUAL[k];
@@ -1316,7 +1318,7 @@ function look(dx, dy) { P.yaw -= dx * .0024; P.pitch = Math.max(-1.45, Math.min(
 function tryLock() { try { const r = cvs.requestPointerLock(); if (r && r.catch) r.catch(() => { dragLook = true; }); } catch (e) { dragLook = true; } setTimeout(() => { if (!locked) dragLook = true; }, 400); }
 const overlay = document.getElementById('overlay'), startBtn = document.getElementById('start');
 function showOverlay(paused) { overlay.hidden = false; startBtn.textContent = paused ? 'Verder wandelen' : 'Start de rondleiding'; }
-const isTouch = matchMedia('(pointer:coarse)').matches; if (isTouch) document.documentElement.classList.add('touch');
+const isTouch = false;
 startBtn.addEventListener('click', () => { overlay.hidden = true; started = true; if (!isTouch) tryLock(); });
 const joy = { x: 0, y: 0, id: null }; const joyEl = document.getElementById('joy'), knob = document.getElementById('knob');
 joyEl.addEventListener('pointerdown', e => { joy.id = e.pointerId; joyEl.setPointerCapture(e.pointerId); moveJoy(e); });
@@ -1742,7 +1744,8 @@ window.__cam = camera;
 window.__fake = (n) => { for (let i = 0; i < n; i++) { const r = makeRemote('fake' + i, (i + 1) % AVATARS.length, null); r.name = AVATARS[(i + 1) % AVATARS.length].label; r.color = ['#3b82f6', '#e11d48', '#16a34a', '#d97706', '#7c3aed', '#0891b2'][i % 6]; setTag(r); const cx = 8 + Math.cos(i) * 2, cz = 7 + Math.sin(i) * 2.2; let t = i; r.pos = { x: cx, y: 0, z: cz }; r.fake = (dt) => { t += dt * .35; r.tgt = { x: cx + Math.cos(t) * 1.2 * (i % 2 ? 1 : 0), y: 0, z: cz + Math.sin(t) * 1.2 * (i % 2 ? 1 : 0), yaw: i % 2 ? -t : i * .9 + 2.6, sp: i % 2 ? 1.5 : 0 }; }; if (i === 2) showBubble(r, 'Goeiemorgen! Koffie iemand?'); if (i === 4) r.avatar.userData.wave(); } renderOnline(); };
 window.__info = () => { let t = 0; scene.traverse(o => { if (o.isMesh && o.geometry) { const n = (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; t += o.isInstancedMesh ? n * o.count : n; } }); return { tris: Math.round(t), draws: renderer.info.render.calls }; };
 window.__openAll = () => doors.forEach(d => { d.target = 1; d.t = 1; });
-startBtn.disabled = false; startBtn.textContent = 'Start'; document.getElementById('loading').textContent = 'Klik op start en daarna in het beeld om rond te kijken.';
+if (IS_PHONE) { startBtn.textContent = 'Alleen op pc'; document.getElementById('loading').textContent = 'Polyverse werkt voorlopig alleen op een computer met toetsenbord en muis. Open de link op je pc.'; }
+else { startBtn.disabled = false; startBtn.textContent = 'Start'; document.getElementById('loading').textContent = 'Klik op start en daarna in het beeld om rond te kijken.'; }
 frame();
 </script>
 
