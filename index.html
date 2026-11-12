@@ -59,8 +59,9 @@ html,body{height:100%;margin:0;overflow:hidden;background:#bcd9e6;font-family:va
     <kbd>W A S D</kbd><span>lopen (of pijltjes)</span>
     <kbd>muis</kbd><span>rondkijken</span>
     <kbd>Shift</kbd><span>sneller lopen</span>
-    <kbd>E</kbd><span>deur openen of sluiten, gaan zitten of opstaan</span>
+    <kbd>E</kbd><span>deur openen of sluiten, gaan zitten of opstaan, spelen</span>
     <kbd>M</kbd><span>kaart groter of kleiner</span>
+    <kbd>P</kbd><span>spelmenu</span>
     <kbd>Esc</kbd><span>pauze</span>
   </div>
   <button id="start" type="button" disabled>Laden…</button>
@@ -1393,7 +1394,7 @@ function setQuality(k) {
   const f = document.createElement('div'); f.id = 'fps'; f.className = 'chip'; document.getElementById('hud').appendChild(f);
 }
 const fpsEl = document.getElementById('fps'); let fpsOn = false, fpsN = 0, fpsT = 0;
-addEventListener('keydown', e => { if (e.code === 'KeyG') { const ks = Object.keys(QUAL); setQuality(ks[(ks.indexOf(quality) + 1) % ks.length]); fpsEl.style.display = 'block'; fpsOn = true; } if (e.code === 'KeyF') { fpsOn = !fpsOn; fpsEl.style.display = fpsOn ? 'block' : 'none'; } });
+addEventListener('keydown', e => { if (typeof GM !== 'undefined' && GM.active) return; if (e.code === 'KeyG') { const ks = Object.keys(QUAL); setQuality(ks[(ks.indexOf(quality) + 1) % ks.length]); fpsEl.style.display = 'block'; fpsOn = true; } if (e.code === 'KeyF') { fpsOn = !fpsOn; fpsEl.style.display = fpsOn ? 'block' : 'none'; } });
 setQuality(quality);
 
 // ───────────────────────── zones
@@ -1416,11 +1417,14 @@ function groundAt(x, z) {
   return STREET;
 }
 const keys = new Set(); let locked = false, dragLook = false, started = false, mapBig = false;
-addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'KeyE' && !e.repeat) interact(); if (e.code === 'KeyM') { mapBig = !mapBig; sizeMap(); } });
-addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('keydown', e => { if (GM.active) { if (e.code === 'Escape') closeGame(); else if (GM.active.key) GM.active.key(e, true); if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].includes(e.code) && !(e.target && e.target.tagName === 'INPUT')) e.preventDefault(); return; }
+  if (e.code === 'KeyP' && started && overlay.hidden && chatBox.hidden) { openGame(MENU); return; }
+  if (e.code === 'KeyK' && SIT.seat && SIT.seat.cards && SIT.phase === 3) { openGame(CARDS.bj); return; }
+  keys.add(e.code); if (e.code === 'KeyE' && !e.repeat) interact(); if (e.code === 'KeyM') { mapBig = !mapBig; sizeMap(); } });
+addEventListener('keyup', e => { if (GM.active) { if (GM.active.key) GM.active.key(e, false); return; } keys.delete(e.code); });
 addEventListener('blur', () => keys.clear());
 const cvs = renderer.domElement;
-document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === cvs; if (!locked && started && !dragLook) showOverlay(true); });
+document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === cvs; if (!locked && started && !dragLook && !GM.active) showOverlay(true); });
 let mouseDown = false;
 document.addEventListener('mousemove', e => { if (locked || (dragLook && mouseDown)) look(e.movementX, e.movementY); });
 cvs.addEventListener('mousedown', () => { mouseDown = true; if (started && !locked && !dragLook && !isTouch) tryLock(); }); addEventListener('mouseup', () => mouseDown = false);
@@ -1464,7 +1468,8 @@ function findSeat() {
 }
 function interact() {
   if (SIT.seat) { standUp(); return; }
-  const nd = findDoor(), ns = findSeat(), dd = nd ? Math.hypot(nd.cx - P.x, nd.cz - P.z) : 1e9;
+  const nd = findDoor(), ns = findSeat(), sp = typeof findSpot === 'function' ? findSpot() : null, dd = nd ? Math.hypot(nd.cx - P.x, nd.cz - P.z) : 1e9;
+  if (sp && sp.d < dd && (!ns || sp.d < ns.d)) { sp.s.act(); return; }
   if (ns && ns.d < dd) sitDown(ns.s); else if (nd) toggleDoor();
 }
 function sitDown(s) {
@@ -1793,7 +1798,7 @@ async function supabaseRoom() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   let createClient; try { ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm')); } catch (e) { console.warn('supabase niet geladen', e); return null; }
   const me = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 20 } } });
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 20 } } }); NET.sbClient = client;
   const ch = client.channel('polygon-bureau', { config: { presence: { key: me }, broadcast: { self: false } } });
   const ids = new Map(), pos = new Map(), peerFns = [], connFns = [], topicFns = new Map(); let ident = {}, connected = false, frozen = Object.freeze([]);
   const build = () => {
@@ -1941,7 +1946,7 @@ chatIn.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Es
 chatIn.addEventListener('keyup', e => e.stopPropagation());
 function wave() { if (NET.room && NET.connected) NET.room.emit('emote', { e: 'wave' }).catch(() => myAvatar.userData.wave()); else myAvatar.userData.wave(); }
 addEventListener('keydown', e => {
-  if (document.activeElement === chatIn || !started || !overlay.hidden) return;
+  if (document.activeElement === chatIn || !started || !overlay.hidden || GM.active) return;
   if (e.code === 'KeyV') { third = !third; try { localStorage.setItem('bureau3d-view', third ? '0' : '1'); } catch (er) { } }
   if (e.code === 'KeyX') wave();
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); }
@@ -1952,7 +1957,8 @@ const zoneEl = document.getElementById('zone'), hintEl = document.getElementById
 const clock = new THREE.Clock(); let t0 = 0, mySpeed = 0;
 function frame() {
   const dt = Math.min(.05, clock.getDelta()); const px = P.x, pz = P.z;
-  if (started && overlay.hidden && chatBox.hidden && SIT.seat) {
+  if (GM.active) { if (GM.active.tick) GM.active.tick(dt); }
+  else if (started && overlay.hidden && chatBox.hidden && SIT.seat) {
     if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyZ', 'KeyQ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].some(k => keys.has(k)) || Math.hypot(joy.x, joy.y) > .3) standUp();
   } else if (started && overlay.hidden && chatBox.hidden) {
     const run = keys.has('ShiftLeft') || keys.has('ShiftRight'), sp = (run ? 4.2 : 2.3) * dt / WS;
@@ -1988,7 +1994,9 @@ function frame() {
   sendPresence(dt, mySpeed);
   placeCamera(third ? 0 : Math.sin(t0) * .025);
   const nd = findDoor(), ns = findSeat(), ndd = nd ? Math.hypot(nd.cx - P.x, nd.cz - P.z) : 1e9;
-  if (SIT.seat) { hintEl.style.display = SIT.phase === 3 ? 'block' : 'none'; hintEl.innerHTML = '<b>E</b>opstaan (of wandel weg)'; }
+  const nsp = findSpot();
+  if (SIT.seat) { hintEl.style.display = SIT.phase === 3 ? 'block' : 'none'; hintEl.innerHTML = '<b>E</b>opstaan (of wandel weg)' + (SIT.seat.cards ? ' · <b>K</b>kaarten' : ''); }
+  else if (nsp && nsp.d < ndd && (!ns || nsp.d < ns.d)) { hintEl.style.display = 'block'; hintEl.innerHTML = `<b>E</b>${nsp.s.label}`; }
   else if (ns && ns.d < ndd) { hintEl.style.display = 'block'; hintEl.innerHTML = `<b>E</b>gaan zitten: ${SEAT_LABEL[ns.s.kind] || 'stoel'}`; }
   else { hintEl.style.display = nd ? 'block' : 'none'; if (nd) hintEl.innerHTML = `<b>E</b>${nd.target ? 'sluiten' : 'openen'}: ${nd.name}`; }
   const z = zoneAt(P.x, P.z), zn = z ? z[0] + '|' + z[1] : ''; if (zn !== lastZone) { lastZone = zn; zoneEl.innerHTML = z ? `${z[0]}<small>${z[1]}</small>` : 'Polygon'; }
@@ -1998,13 +2006,397 @@ function frame() {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); sizeMap(); });
 window.__view = (x, z, yaw, pitch = 0) => { Object.assign(P, { x, z, yaw, pitch }); P.y = groundAt(x, z); started = true; overlay.hidden = true; };
 window.__third = (on) => { third = on; };
-window.__interact = () => interact(); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
+window.__interact = () => interact(); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
 window.__cam = camera;
 window.__fake = (n) => { for (let i = 0; i < n; i++) { const r = makeRemote('fake' + i, (i + 1) % AVATARS.length, null); r.name = AVATARS[(i + 1) % AVATARS.length].label; r.color = ['#3b82f6', '#e11d48', '#16a34a', '#d97706', '#7c3aed', '#0891b2'][i % 6]; setTag(r); const cx = 8 + Math.cos(i) * 2, cz = 7 + Math.sin(i) * 2.2; let t = i; r.pos = { x: cx, y: 0, z: cz }; r.fake = (dt) => { t += dt * .35; r.tgt = { x: cx + Math.cos(t) * 1.2 * (i % 2 ? 1 : 0), y: 0, z: cz + Math.sin(t) * 1.2 * (i % 2 ? 1 : 0), yaw: i % 2 ? -t : i * .9 + 2.6, sp: i % 2 ? 1.5 : 0 }; }; if (i === 2) showBubble(r, 'Goeiemorgen! Koffie iemand?'); if (i === 4) r.avatar.userData.wave(); } renderOnline(); };
 window.__info = () => { let t = 0; scene.traverse(o => { if (o.isMesh && o.geometry) { const n = (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; t += o.isInstancedMesh ? n * o.count : n; } }); return { tris: Math.round(t), draws: renderer.info.render.calls }; };
 window.__openAll = () => doors.forEach(d => { d.target = 1; d.t = 1; });
 if (IS_PHONE) { startBtn.textContent = 'Alleen op pc'; document.getElementById('loading').textContent = 'Polyverse werkt voorlopig alleen op een computer met toetsenbord en muis. Open de link op je pc.'; }
 else { startBtn.disabled = false; startBtn.textContent = 'Start'; document.getElementById('loading').textContent = 'Klik op start en daarna in het beeld om rond te kijken.'; }
+// ═════════════════════════ SPELLETJES — basis: spelpaneel, geluid, scores en ranglijsten, plekken in het kantoor
+const GM = { active: null };
+{ const st = document.createElement('style'); st.textContent = `
+#gm{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(20,18,16,.55);font-family:var(--display);color:var(--ink)}
+#gm[hidden]{display:none!important}
+#gm .gp{position:relative;background:var(--paper);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.45);padding:18px 20px 16px;max-width:min(1180px,96vw);max-height:94vh;overflow:auto}
+#gm .gx{position:absolute;top:10px;right:12px;border:0;background:#22201d;color:#f4f1ea;border-radius:8px;padding:6px 10px;font:600 13px var(--display);cursor:pointer}
+#gm h2{margin:0 0 10px;font-size:20px;font-weight:800}
+#gm .muted{color:var(--muted);font-size:13px}
+#gm button.b{border:0;border-radius:9px;padding:9px 14px;font:600 14px var(--display);background:#22201d;color:#f4f1ea;cursor:pointer;margin:3px}
+#gm button.b.alt{background:#e7e1d6;color:#22201d}
+#gm button.b:disabled{opacity:.4;cursor:default}
+#gm .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:8px}
+#gm .tile{background:#fffdf8;border:1px solid #ddd5c6;border-radius:12px;padding:12px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+#gm .tile:hover{border-color:var(--walnut)}
+#gm .tile b{display:block;font-size:15px;margin-bottom:3px}
+#gm .tile.soon{opacity:.55;cursor:default}
+#gm .crt{background:#05060c;border-radius:14px;padding:14px;box-shadow:inset 0 0 40px rgba(80,140,255,.15)}
+#gm canvas.px{image-rendering:pixelated;display:block}
+#gm .lb{font:500 13px var(--mono);margin:6px 0 0;padding:0;list-style:none}
+#gm .lb li{display:flex;justify-content:space-between;gap:16px;padding:2px 0;border-bottom:1px dashed #d8d0c2}
+.felt{background:radial-gradient(ellipse at 50% 30%,#1f6b47,#124530);border-radius:14px;padding:16px;color:#f4f1ea}
+.card{position:absolute;width:64px;height:90px;border-radius:7px;background:#fffdf8;border:1px solid #bdb5a6;box-shadow:0 1px 3px rgba(0,0,0,.35);font:700 15px var(--display);color:#1d1b18;user-select:none;cursor:pointer}
+.card.red{color:#c0262d}.card .r1{position:absolute;left:5px;top:3px;line-height:1}.card .r2{position:absolute;right:5px;bottom:3px;transform:rotate(180deg);line-height:1}.card .mid{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px}
+.card.back{background:repeating-linear-gradient(45deg,#7b4b30 0 6px,#8b5a3c 6px 12px);border:3px solid #fffdf8}
+.card.sel{outline:3px solid #e0a33a;outline-offset:1px}
+.slot{position:absolute;width:64px;height:90px;border-radius:7px;border:2px dashed rgba(255,255,255,.35)}
+.hand{position:relative;height:96px;margin:6px 0}
+`; document.head.appendChild(st); }
+const gmEl = document.createElement('div'); gmEl.id = 'gm'; gmEl.hidden = true; document.body.appendChild(gmEl);
+function openGame(g) {
+  if (GM.active) closeGame(true); GM.active = g; keys.clear(); gmEl.innerHTML = ''; gmEl.hidden = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  const p = document.createElement('div'); p.className = 'gp' + (g.cls ? ' ' + g.cls : ''); gmEl.appendChild(p);
+  const x = document.createElement('button'); x.className = 'gx'; x.textContent = 'Terug (Esc)'; x.onclick = () => closeGame(); p.appendChild(x);
+  g.open(p);
+}
+function closeGame(quiet) {
+  const g = GM.active; if (!g) return; GM.active = null; try { if (g.close) g.close(); } catch (e) { }
+  gmEl.hidden = true; gmEl.innerHTML = ''; keys.clear(); if (!quiet && started) showOverlay(true);
+}
+gmEl.addEventListener('pointerdown', e => { if (e.target === gmEl) closeGame(); });
+// ── geluid (zelf opgewekt, geen bestanden)
+let AC = null;
+function sfx(f = 440, d = .08, type = 'square', vol = .06, slide = 0) {
+  try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + d); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g).connect(AC.destination); o.start(t); o.stop(t + d + .02); } catch (e) { }
+}
+function noise(d = .2, vol = .08) {
+  try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); const n = Math.floor(AC.sampleRate * d), b = AC.createBuffer(1, n, AC.sampleRate), ch = b.getChannelData(0); for (let i = 0; i < n; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = AC.createBufferSource(), g = AC.createGain(); g.gain.value = vol; s.buffer = b; s.connect(g).connect(AC.destination); s.start(); } catch (e) { }
+}
+// ── scores: lokaal beste score; gedeelde ranglijst via de database van de pagina (claude.ai) of de Supabase-tabel polyverse_scores (GitHub)
+const myName = () => NET.myName || (AVATARS[myAv] && AVATARS[myAv].label) || 'Ik';
+const SCORES = {
+  best(g) { try { return +localStorage.getItem('pv-best-' + g) || 0; } catch (e) { return 0; } },
+  async submit(g, s) {
+    s = Math.max(0, Math.round(s)); if (!s) return; const better = s > this.best(g); if (better) try { localStorage.setItem('pv-best-' + g, s); } catch (e) { }
+    try {
+      if (NET.db && NET.myId) { const ref = NET.db.doc(`scores/${g}_${NET.myId}`), cur = await ref.get(); if (!cur.exists || (cur.data().s || 0) < s) await ref.set({ g, uid: NET.myId, s, t: Date.now() }); }
+      else if (NET.sbClient) await NET.sbClient.from('polyverse_scores').insert({ game: g, name: myName().slice(0, 30), score: s });
+    } catch (e) { }
+  },
+  async top(g, n = 8) {
+    try {
+      if (NET.db) {
+        const q = await NET.db.collection('scores').where('g', '==', g).orderBy('s', 'desc').limit(n).get(); const rows = q.docs.map(d => d.data());
+        let ps = {}; if (NET.user && NET.user.profiles) try { ps = await NET.user.profiles(rows.map(r => r.uid)); } catch (e) { }
+        return rows.map(r => ({ name: (ps[r.uid] && ps[r.uid].name) || (r.uid === NET.myId ? 'Jij' : 'Collega'), score: r.s }));
+      }
+      if (NET.sbClient) {
+        const { data, error } = await NET.sbClient.from('polyverse_scores').select('name,score').eq('game', g).order('score', { ascending: false }).limit(60);
+        if (!error && data) { const seen = new Set(), out = []; for (const r of data) { if (seen.has(r.name)) continue; seen.add(r.name); out.push({ name: r.name, score: r.score }); if (out.length >= n) break; } return out; }
+      }
+    } catch (e) { }
+    const b = this.best(g); return b ? [{ name: 'Jij (enkel op dit toestel)', score: b }] : [];
+  },
+  async render(el, g, title) {
+    el.innerHTML = `<div class="muted">${title || 'Ranglijst'} · laden…</div>`;
+    const rows = await this.top(g); el.innerHTML = `<div class="muted">${title || 'Ranglijst'}</div>` + (rows.length ? '<ol class="lb">' + rows.map((r, i) => `<li><span>${i + 1}. ${esc(r.name)}</span><b>${r.score}</b></li>`).join('') + '</ol>' : '<div class="muted">Nog geen scores.</div>');
+  }
+};
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+// ── gedeelde sleutel/waarde-opslag (whiteboard): database van de pagina of Supabase-tabel polyverse_kv
+const KV = {
+  async get(k) {
+    try { if (NET.db) { const s = await NET.db.doc('world/' + k).get(); return s.exists ? s.data().v : null; } if (NET.sbClient) { const { data } = await NET.sbClient.from('polyverse_kv').select('value').eq('key', k).maybeSingle(); return data ? data.value : null; } } catch (e) { }
+    return null;
+  },
+  async set(k, v) {
+    try { if (NET.db) await NET.db.doc('world/' + k).set({ v }); else if (NET.sbClient) await NET.sbClient.from('polyverse_kv').upsert({ key: k, value: v, updated_at: new Date().toISOString() }); } catch (e) { }
+  },
+  watch(k, fn) { if (NET.db) NET.db.doc('world/' + k).onSnapshot(s => { if (s.exists && !s.metadata.hasPendingWrites) fn(s.data().v); }, () => { }); }
+};
+// ── plekken waar je met E iets start
+const SPOTS = [];
+function findSpot() {
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 1e9;
+  for (const s of SPOTS) { const d = Math.hypot(s.x - P.x, s.z - P.z), tx = s.tx - P.x, tz = s.tz - P.z, td = Math.hypot(tx, tz); if (d < s.r && d < bd && (tx * fx + tz * fz) / (td || 1) > .45) { best = s; bd = d; } }   // binnen bereik en kijkend naar het voorwerp
+  return best && { s: best, d: bd };
+}
+
+// ═════════════════════════ ARCADEKAST: drie eigen retrospelletjes (320 × 240 pixels), ook live op het scherm van de kast
+const ARC = (() => {
+  const W = 320, H = 240, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.NearestFilter;
+  const idleMap = M.scr_arcade.map; const inp = { l: 0, r: 0, u: 0, d: 0, f: 0, fp: 0 };
+  const txt = (s, x, y, c = '#fff', sz = 8, al = 'center') => { g.fillStyle = c; g.font = `bold ${sz}px monospace`; g.textAlign = al; g.fillText(s, x, y); };
+  const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  const poly = (x, y, r, n, rot, c) => { g.fillStyle = c; g.beginPath(); for (let i = 0; i < n; i++) { const a = rot + i / n * 6.283; g[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * r, y + Math.sin(a) * r); } g.closePath(); g.fill(); };
+  // ── 1. Polygon Defender: veelhoeken in formatie; zeshoeken hebben 2 treffers nodig, duikers vallen aan
+  const defender = {
+    id: 'arc_defender', name: 'Polygon Defender', help: '← → bewegen · spatie vuren',
+    init() { this.ship = { x: 152, y: 218, w: 16, h: 10 }; this.b = []; this.eb = []; this.lives = 3; this.score = 0; this.wave = 0; this.cd = 0; this.inv = 0; this.stars = Array.from({ length: 50 }, () => [Math.random() * W, Math.random() * H, .3 + Math.random()]); this.next(); },
+    next() { this.wave++; this.en = []; const rows = Math.min(5, 3 + (this.wave >> 1)); for (let r = 0; r < rows; r++) for (let c = 0; c < 8; c++) { const t = r === 0 ? 6 : r < 3 ? 4 : 3; this.en.push({ x: 40 + c * 30, y: 30 + r * 20, w: 14, h: 14, t, hp: t === 6 ? 2 : 1, dive: 0 }); } this.dir = 1; this.sp = 16 + this.wave * 5; this.diveT = 3; },
+    update(dt) {
+      for (const s of this.stars) { s[1] += s[2] * 30 * dt; if (s[1] > H) { s[1] = 0; s[0] = Math.random() * W; } }
+      const sh = this.ship; sh.x = Math.max(4, Math.min(W - 20, sh.x + (inp.r - inp.l) * 150 * dt)); this.cd -= dt; this.inv -= dt;
+      if (inp.f && this.cd <= 0 && this.b.length < 3) { this.b.push({ x: sh.x + 7, y: sh.y - 6, w: 2, h: 6 }); this.cd = .22; sfx(880, .06, 'square', .04, -400); }
+      for (const b of this.b) b.y -= 260 * dt; this.b = this.b.filter(b => b.y > -10);
+      let edge = false; for (const e of this.en) if (!e.dive) { e.x += this.dir * this.sp * dt; if (e.x < 6 || e.x > W - 20) edge = true; }
+      if (edge) { this.dir *= -1; for (const e of this.en) if (!e.dive) e.y += 6; }
+      this.diveT -= dt; if (this.diveT <= 0 && this.en.length) { const e = this.en[Math.random() * this.en.length | 0]; e.dive = 1; e.ph = 0; e.x0 = e.x; this.diveT = Math.max(.8, 3 - this.wave * .25); }
+      for (const e of this.en) if (e.dive) { e.ph += dt; e.y += (70 + this.wave * 8) * dt; e.x = e.x0 + Math.sin(e.ph * 3) * 40; if (e.y > H) { e.y = 10; e.dive = 0; } }
+      if (Math.random() < dt * (.6 + this.wave * .25) && this.en.length) { const e = this.en[Math.random() * this.en.length | 0]; this.eb.push({ x: e.x + 6, y: e.y + 14, w: 3, h: 6 }); }
+      for (const b of this.eb) b.y += (110 + this.wave * 6) * dt; this.eb = this.eb.filter(b => b.y < H);
+      for (const b of this.b) for (const e of this.en) if (!b.dead && hit(b, e)) { b.dead = 1; if (--e.hp <= 0) { e.dead = 1; this.score += e.t * 10 * (e.dive ? 2 : 1); sfx(220, .12, 'sawtooth', .05, -150); } else sfx(500, .05); }
+      this.b = this.b.filter(b => !b.dead); this.en = this.en.filter(e => !e.dead);
+      if (this.inv <= 0) for (const o of [...this.eb, ...this.en]) if (hit(o, sh)) { this.lives--; this.inv = 2; o.dead = 1; noise(.35, .12); if (o.t) o.y = 10; break; }
+      this.eb = this.eb.filter(b => !b.dead); if (this.en.some(e => !e.dive && e.y > 200)) this.lives = 0;
+      if (!this.en.length) { this.next(); sfx(660, .3, 'triangle', .06, 600); }
+      return this.lives <= 0;
+    },
+    draw() {
+      g.fillStyle = '#05060c'; g.fillRect(0, 0, W, H); for (const [x, y, s] of this.stars) { g.fillStyle = `rgba(200,220,255,${s * .6})`; g.fillRect(x, y, 1, 1); }
+      const cols = { 6: '#ffd34d', 4: '#55e0ff', 3: '#ff5a6e' };
+      for (const e of this.en) poly(e.x + 7, e.y + 7, 7, e.t, performance.now() / 600 + e.x, e.hp > 1 ? cols[6] : e.t === 6 ? '#c79a2a' : cols[e.t]);
+      const sh = this.ship; if (this.inv <= 0 || (performance.now() / 100 | 0) % 2) { g.fillStyle = '#9dff6b'; g.beginPath(); g.moveTo(sh.x + 8, sh.y - 4); g.lineTo(sh.x + 16, sh.y + 10); g.lineTo(sh.x, sh.y + 10); g.fill(); }
+      g.fillStyle = '#fff'; for (const b of this.b) g.fillRect(b.x, b.y, b.w, b.h); g.fillStyle = '#ff8a3d'; for (const b of this.eb) g.fillRect(b.x, b.y, b.w, b.h);
+      txt('SCORE ' + this.score, 6, 10, '#fff', 8, 'left'); txt('GOLF ' + this.wave, W / 2, 10, '#ffd34d'); txt('♥'.repeat(Math.max(0, this.lives)), W - 6, 10, '#ff5a6e', 8, 'right');
+    }
+  };
+  // ── 2. Kabelkluwen: een netwerkkabel die koffiekoppen opraapt; elke 5 koppen komt er een bureau bij
+  const cable = {
+    id: 'arc_kabel', name: 'Kabelkluwen', help: 'pijltjes sturen · niet tegen jezelf of de bureaus',
+    init() { this.cs = 10; this.gw = 32; this.gh = 21; this.s = [[8, 10], [7, 10], [6, 10]]; this.dir = [1, 0]; this.nd = [1, 0]; this.t = 0; this.step = .13; this.score = 0; this.eaten = 0; this.grow = 0; this.walls = []; this.food = this.free(); },
+    free() { for (; ;) { const p = [Math.random() * this.gw | 0, Math.random() * this.gh | 0]; if (!this.occ(p)) return p; } },
+    occ(p) { return this.s.some(q => q[0] === p[0] && q[1] === p[1]) || this.walls.some(w => p[0] >= w[0] && p[0] < w[0] + 3 && p[1] >= w[1] && p[1] < w[1] + 2); },
+    update(dt) {
+      const d = inp.l ? [-1, 0] : inp.r ? [1, 0] : inp.u ? [0, -1] : inp.d ? [0, 1] : null; if (d && (d[0] !== -this.dir[0] || d[1] !== -this.dir[1])) this.nd = d;
+      this.t += dt; if (this.t < this.step) return false; this.t = 0; this.dir = this.nd;
+      const h = [this.s[0][0] + this.dir[0], this.s[0][1] + this.dir[1]];
+      if (h[0] < 0 || h[1] < 0 || h[0] >= this.gw || h[1] >= this.gh || this.occ(h)) { noise(.4, .12); return true; }
+      this.s.unshift(h); if (h[0] === this.food[0] && h[1] === this.food[1]) { this.score += 10 + this.eaten; this.eaten++; this.grow += 2; this.step = Math.max(.055, this.step - .004); sfx(740, .07, 'square', .05, 300);
+        if (this.eaten % 5 === 0) { for (let k = 0; k < 40; k++) { const w = [Math.random() * (this.gw - 3) | 0, Math.random() * (this.gh - 2) | 0]; const near = Math.abs(w[0] - h[0]) < 6 && Math.abs(w[1] - h[1]) < 6; if (!near && !this.s.some(q => q[0] >= w[0] && q[0] < w[0] + 3 && q[1] >= w[1] && q[1] < w[1] + 2)) { this.walls.push(w); break; } } }
+        this.food = this.free(); }
+      if (this.grow > 0) this.grow--; else this.s.pop(); return false;
+    },
+    draw() {
+      const cs = this.cs, oy = 24; g.fillStyle = '#0b0d14'; g.fillRect(0, 0, W, H); g.fillStyle = '#141a26'; for (let x = 0; x < this.gw; x++) for (let y = 0; y < this.gh; y++) if ((x + y) % 2) g.fillRect(x * cs, oy + y * cs, cs, cs);
+      g.fillStyle = '#e8e2d6'; for (const w of this.walls) { g.fillRect(w[0] * cs, oy + w[1] * cs, 30, 20); g.fillStyle = '#7b4b30'; g.fillRect(w[0] * cs + 2, oy + w[1] * cs + 16, 4, 4); g.fillRect(w[0] * cs + 24, oy + w[1] * cs + 16, 4, 4); g.fillStyle = '#e8e2d6'; }
+      const [fx, fy] = this.food; g.fillStyle = '#fff'; g.fillRect(fx * cs + 2, oy + fy * cs + 3, 5, 6); g.fillRect(fx * cs + 7, oy + fy * cs + 4, 2, 3); g.fillStyle = '#6b4226'; g.fillRect(fx * cs + 3, oy + fy * cs + 3, 3, 1);
+      this.s.forEach(([x, y], i) => { g.fillStyle = i === 0 ? '#ffd34d' : i % 2 ? '#3b82f6' : '#2a64c4'; g.fillRect(x * cs + 1, oy + y * cs + 1, cs - 2, cs - 2); });
+      txt('SCORE ' + this.score, 6, 14, '#fff', 8, 'left'); txt('KOFFIE ' + this.eaten, W - 6, 14, '#ffd34d', 8, 'right');
+    }
+  };
+  // ── 3. Gevelbreker: bal en balk tegen een gevel van gele bakstenen
+  const breaker = {
+    id: 'arc_gevel', name: 'Gevelbreker', help: '← → balk · spatie lanceren',
+    init() { this.p = { x: 135, y: 226, w: 50, h: 6 }; this.lives = 3; this.score = 0; this.lvl = 0; this.next(); },
+    next() { this.lvl++; this.br = []; const cols = ['#c9a77b', '#b8936a', '#d4b48c', '#a8835c', '#bf9b74', '#ceaa80']; for (let r = 0; r < 5 + Math.min(3, this.lvl); r++) for (let c = 0; c < 10; c++) { if (this.lvl > 1 && (r + c + this.lvl) % 7 === 0) continue; this.br.push({ x: 8 + c * 30.4 + (r % 2 ? 6 : 0) - 3, y: 26 + r * 12, w: 28, h: 10, c: cols[(r * 3 + c) % 6], hp: r < this.lvl - 1 ? 2 : 1 }); } this.reset(); },
+    reset() { this.ball = { x: 160, y: 218, w: 5, h: 5, vx: 0, vy: 0, stuck: 1 }; this.spd = 150 + this.lvl * 15; },
+    update(dt) {
+      const p = this.p, b = this.ball; p.x = Math.max(0, Math.min(W - p.w, p.x + (inp.r - inp.l) * 230 * dt));
+      if (b.stuck) { b.x = p.x + p.w / 2 - 2; b.y = p.y - 6; if (inp.fp) { b.stuck = 0; b.vx = (Math.random() - .5) * 120; b.vy = -this.spd; } return false; }
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx); sfx(300, .03); } if (b.x > W - 5) { b.x = W - 5; b.vx = -Math.abs(b.vx); sfx(300, .03); } if (b.y < 16) { b.y = 16; b.vy = Math.abs(b.vy); sfx(300, .03); }
+      if (b.vy > 0 && hit(b, p)) { const k = (b.x + 2.5 - (p.x + p.w / 2)) / (p.w / 2), a = k * 1.05; this.spd *= 1.01; b.vx = Math.sin(a) * this.spd; b.vy = -Math.cos(a) * this.spd; sfx(440, .04, 'square', .05); }
+      for (const r of this.br) if (hit(b, r)) { const ox = Math.min(b.x + 5 - r.x, r.x + r.w - b.x), oy = Math.min(b.y + 5 - r.y, r.y + r.h - b.y); if (ox < oy) b.vx *= -1; else b.vy *= -1; if (--r.hp <= 0) { r.dead = 1; this.score += 10 * this.lvl; } sfx(620 + Math.random() * 200, .05, 'square', .05); break; }
+      this.br = this.br.filter(r => !r.dead);
+      if (b.y > H) { this.lives--; noise(.3, .1); if (this.lives > 0) this.reset(); }
+      if (!this.br.length) { this.next(); sfx(660, .3, 'triangle', .06, 600); }
+      return this.lives <= 0;
+    },
+    draw() {
+      g.fillStyle = '#121016'; g.fillRect(0, 0, W, H); for (const r of this.br) { g.fillStyle = r.c; g.fillRect(r.x, r.y, r.w, r.h); if (r.hp > 1) { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(r.x, r.y + r.h - 3, r.w, 3); } }
+      g.fillStyle = '#e8e2d6'; g.fillRect(this.p.x, this.p.y, this.p.w, this.p.h); g.fillStyle = '#ffd34d'; g.fillRect(this.ball.x, this.ball.y, 5, 5);
+      txt('SCORE ' + this.score, 6, 10, '#fff', 8, 'left'); txt('GEVEL ' + this.lvl, W / 2, 10, '#ffd34d'); txt('●'.repeat(Math.max(0, this.lives)), W - 6, 10, '#e8e2d6', 8, 'right');
+      if (this.ball.stuck) txt('SPATIE OM TE LANCEREN', W / 2, 200, '#ffd34d');
+    }
+  };
+  const list = [defender, cable, breaker];
+  let st = 'menu', sel = 0, cur = null, overT = 0, lbEl = null, panel = null;
+  function drawMenu() {
+    g.fillStyle = '#05060c'; g.fillRect(0, 0, W, H); txt('POLYGON', W / 2, 40, '#ffd34d', 26); txt('A R C A D E', W / 2, 58, '#55e0ff', 10);
+    list.forEach((s, i) => { const y = 100 + i * 30; if (i === sel) { g.fillStyle = '#ffd34d'; g.fillRect(70, y - 13, 180, 20); } txt(s.name.toUpperCase(), W / 2, y, i === sel ? '#05060c' : '#fff', 10); txt('BEST ' + SCORES.best(s.id), W / 2, y + 12, '#7f8aa3', 7); });
+    txt('↑ ↓ KIEZEN · ENTER SPELEN', W / 2, 220, '#9dff6b', 8);
+  }
+  function showLb() { if (lbEl) SCORES.render(lbEl, list[sel].id, list[sel].name + ' · ranglijst'); }
+  const game = {
+    cls: '',
+    open(p) {
+      panel = p; st = 'menu'; Object.keys(inp).forEach(k => inp[k] = 0);
+      p.insertAdjacentHTML('beforeend', `<h2>Arcadekast</h2><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><div class="crt"><canvas class="px" width="${W}" height="${H}" style="width:min(800px,80vw);aspect-ratio:4/3"></canvas></div><div style="min-width:200px;max-width:240px"><div class="muted" id="arcHelp">Kies een spel met de pijltjes en druk op Enter.</div><div id="arcLb" style="margin-top:12px"></div></div></div>`);
+      const c = p.querySelector('canvas'); this.vc = c.getContext('2d'); this.vc.imageSmoothingEnabled = false; lbEl = p.querySelector('#arcLb'); showLb();
+      M.scr_arcade.map = tex; M.scr_arcade.needsUpdate = true;
+    },
+    close() { M.scr_arcade.map = idleMap; M.scr_arcade.needsUpdate = true; if (st === 'play' && cur) SCORES.submit(cur.id, cur.score); },
+    key(e, down) {
+      const k = e.code, v = down ? 1 : 0;
+      if (k === 'ArrowLeft' || k === 'KeyA' || k === 'KeyQ') inp.l = v; else if (k === 'ArrowRight' || k === 'KeyD') inp.r = v; else if (k === 'ArrowUp' || k === 'KeyW' || k === 'KeyZ') inp.u = v; else if (k === 'ArrowDown' || k === 'KeyS') inp.d = v;
+      else if (k === 'Space') { if (down && !inp.f) inp.fp = 1; inp.f = v; }
+      if (!down) return;
+      if (st === 'menu') { if (k === 'ArrowUp' || k === 'KeyW') { sel = (sel + 2) % 3; sfx(520, .04); showLb(); } if (k === 'ArrowDown' || k === 'KeyS') { sel = (sel + 1) % 3; sfx(520, .04); showLb(); } if (k === 'Enter' || k === 'Space') { cur = list[sel]; cur.init(); st = 'play'; sfx(880, .1, 'triangle', .06, 400); panel.querySelector('#arcHelp').textContent = cur.name + ': ' + cur.help + ' · Backspace = terug naar het menu'; } }
+      else if (st === 'over' && overT > .6 && (k === 'Enter' || k === 'Space')) { cur.init(); st = 'play'; }
+      else if (k === 'Backspace') { if (st === 'play') SCORES.submit(cur.id, cur.score); st = 'menu'; showLb(); }
+    },
+    tick(dt) {
+      if (st === 'play') { if (cur.update(dt)) { st = 'over'; overT = 0; SCORES.submit(cur.id, cur.score).then(showLb); sfx(200, .6, 'sawtooth', .06, -150); } cur.draw(); }
+      else if (st === 'over') { overT += dt; cur.draw(); g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(40, 80, 240, 70); txt('GAME OVER', W / 2, 105, '#ff5a6e', 16); txt('SCORE ' + cur.score + '   BEST ' + SCORES.best(cur.id), W / 2, 122, '#fff', 8); txt('ENTER = OPNIEUW · BACKSPACE = MENU', W / 2, 140, '#9dff6b', 7); }
+      else drawMenu();
+      inp.fp = 0; if (this.vc) this.vc.drawImage(cv, 0, 0); tex.needsUpdate = true;
+    }
+  };
+  return game;
+})();
+
+// ═════════════════════════ WHITEBOARD in het sas: tekenen met de muis; iedereen ziet de tekening en ze blijft bewaard
+const WB = (() => {
+  const CW = 1024, CH = 612, cv = document.createElement('canvas'); cv.width = CW; cv.height = CH; const g = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(1.74, 1.04), new THREE.MeshStandardMaterial({ map: tex, roughness: .35 }));
+  board.position.set(1.3685, 1.45, 1.6); board.rotation.y = -Math.PI / 2; board.receiveShadow = true; WORLD.add(board);
+  const BG = '#f7f7f4'; let strokes = [], cur = null, tool = { c: '#1d1d1f', w: 4 }, saveT = null, panelCv = null;
+  const seg = (ctx, s, sc) => { ctx.strokeStyle = s.c; ctx.lineWidth = s.w * sc; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); s.p.forEach(([x, y], i) => ctx[i ? 'lineTo' : 'moveTo'](x * CW * sc / (sc), y * CH)); if (s.p.length === 1) ctx.lineTo(s.p[0][0] * CW + .1, s.p[0][1] * CH); ctx.stroke(); };
+  function redraw() { g.fillStyle = BG; g.fillRect(0, 0, CW, CH); for (const s of strokes) seg(g, s, 1); tex.needsUpdate = true; if (panelCv) panelCv.getContext('2d').drawImage(cv, 0, 0); }
+  const pack = () => JSON.stringify(strokes.slice(-500).map(s => ({ c: s.c, w: s.w, p: s.p.map(([x, y]) => [+x.toFixed(3), +y.toFixed(3)]) })));
+  function save() { clearTimeout(saveT); saveT = setTimeout(() => KV.set('whiteboard', pack()), 1200); }
+  function apply(v) { if (cur) return; try { const a = typeof v === 'string' ? JSON.parse(v) : v; if (Array.isArray(a)) { strokes = a; redraw(); } } catch (e) { } }
+  const send = (a, d) => { if (NET.sb && NET.room) NET.room.emit('wb', { a, d }).catch(() => { }); };
+  function onNet(m) { if (m.sameTab || !m.data) return; const { a, d } = m.data; if (a === 'add' && d && Array.isArray(d.p)) { strokes.push(d); redraw(); } else if (a === 'clear') { strokes = []; redraw(); } else if (a === 'all') apply(d); }
+  redraw();
+  // laden zodra de verbinding er is
+  const boot = setInterval(() => {
+    if (NET.db || NET.sbClient || (NET.room && NET.sb)) { clearInterval(boot); KV.get('whiteboard').then(v => v && apply(v)); KV.watch('whiteboard', apply);
+      if (NET.sb && NET.room) { NET.room.on('wb', onNet); NET.room.on('hello', m => { if (!m.sameTab && strokes.length) send('all', pack()); }); } }
+  }, 1000); setTimeout(() => clearInterval(boot), 30000);
+  SPOTS.push({ x: .72, z: 1.6, tx: 1.37, tz: 1.6, r: 1.3, label: 'tekenen op het whiteboard', act: () => openGame(game) });
+  const game = {
+    open(p) {
+      p.insertAdjacentHTML('beforeend', `<h2>Whiteboard</h2><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px" id="wbt"></div><canvas width="${CW}" height="${CH}" style="width:min(1100px,90vw);border-radius:8px;border:6px solid #cfd3d6;background:${BG};touch-action:none;cursor:crosshair;display:block"></canvas><div class="muted" style="margin-top:6px">Wat je tekent, zien je collega's op het bord in het sas. De tekening blijft bewaard.</div>`);
+      const bar = p.querySelector('#wbt'), c = p.querySelector('canvas'); panelCv = c; c.getContext('2d').drawImage(cv, 0, 0);
+      const pens = [['Zwart', '#1d1d1f', 4], ['Blauw', '#1f5fbf', 4], ['Rood', '#c9302c', 4], ['Groen', '#2e8b4a', 4], ['Dik', null, 10], ['Gom', BG, 34]];
+      for (const [n, col, w] of pens) { const b = document.createElement('button'); b.className = 'b alt'; b.textContent = n; if (col) b.style.boxShadow = `inset 0 -4px 0 ${col}`; b.onclick = () => { if (col) tool.c = col; tool.w = w; [...bar.children].forEach(x => x.style.outline = ''); b.style.outline = '2px solid #e0a33a'; }; bar.appendChild(b); }
+      const clr = document.createElement('button'); clr.className = 'b'; clr.textContent = 'Bord wissen'; clr.onclick = () => { if (!confirm('Het hele bord wissen, ook voor je collega\'s?')) return; strokes = []; redraw(); save(); send('clear'); }; bar.appendChild(clr);
+      const pos = e => { const r = c.getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))]; };
+      c.onpointerdown = e => { c.setPointerCapture(e.pointerId); cur = { c: tool.c, w: tool.w, p: [pos(e)] }; strokes.push(cur); redraw(); };
+      c.onpointermove = e => { if (!cur) return; const q = pos(e), l = cur.p[cur.p.length - 1]; if (Math.hypot((q[0] - l[0]) * CW, (q[1] - l[1]) * CH) < 2.5) return; cur.p.push(q); const ctx = g; ctx.strokeStyle = cur.c; ctx.lineWidth = cur.w; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(l[0] * CW, l[1] * CH); ctx.lineTo(q[0] * CW, q[1] * CH); ctx.stroke(); tex.needsUpdate = true; c.getContext('2d').drawImage(cv, 0, 0); };
+      c.onpointerup = c.onpointercancel = () => { if (!cur) return; const s = cur; cur = null; save(); send('add', s); };
+    },
+    close() { panelCv = null; cur = null; },
+    key() { }
+  };
+  return game;
+})();
+
+// ═════════════════════════ KAARTEN aan de eettafel: blackjack (tegen de bank) en patience (Klondike)
+const CARDS = (() => {
+  const SUITS = ['♠', '♥', '♦', '♣'], RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  const deck = (n = 1) => { const d = []; for (let k = 0; k < n; k++) for (let s = 0; s < 4; s++) for (let r = 0; r < 13; r++) d.push({ s, r }); for (let i = d.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [d[i], d[j]] = [d[j], d[i]]; } return d; };
+  const red = c => c.s === 1 || c.s === 2;
+  function cardEl(c, up = true) {
+    const e = document.createElement('div'); e.className = 'card' + (up ? (red(c) ? ' red' : '') : ' back');
+    if (up) e.innerHTML = `<span class="r1">${RANKS[c.r]}<br>${SUITS[c.s]}</span><span class="mid">${SUITS[c.s]}</span><span class="r2">${RANKS[c.r]}<br>${SUITS[c.s]}</span>`; return e;
+  }
+  // ── blackjack
+  const bj = {
+    open(p) {
+      this.p = p; this.shoe = deck(6); this.bet = 10; this.phase = 'bet'; this.ph = []; this.dh = []; this.msg = 'Kies je inzet en druk op Delen.';
+      try { this.chips = +localStorage.getItem('pv-chips') || 100; } catch (e) { this.chips = 100; }
+      p.insertAdjacentHTML('beforeend', `<h2>Blackjack</h2><div class="felt" style="width:min(720px,88vw)"><div class="muted" style="color:#cfe3d6">Bank</div><div class="hand" id="dh"></div><div id="dv" style="height:18px;font-size:13px"></div><div class="muted" style="color:#cfe3d6;margin-top:10px">Jij</div><div class="hand" id="ph"></div><div id="pv" style="height:18px;font-size:13px"></div><div id="msg" style="margin:10px 0 6px;font-weight:700;min-height:20px"></div><div id="ctl"></div></div><div style="display:flex;justify-content:space-between;gap:14px;margin-top:10px;flex-wrap:wrap"><div class="muted" id="chips"></div><div id="lb" style="min-width:220px"></div></div>`);
+      SCORES.render(p.querySelector('#lb'), 'blackjack', 'Meeste fiches'); this.render();
+    },
+    draw() { if (this.shoe.length < 60) this.shoe = deck(6); return this.shoe.pop(); },
+    val(h) { let v = 0, a = 0; for (const c of h) { v += c.r === 0 ? 11 : Math.min(10, c.r + 1); if (c.r === 0) a++; } while (v > 21 && a) { v -= 10; a--; } return v; },
+    deal() { if (this.bet > this.chips) return; this.chips -= this.bet; this.cur = this.bet; this.ph = [this.draw(), this.draw()]; this.dh = [this.draw(), this.draw()]; this.phase = 'play'; this.msg = ''; sfx(500, .05);
+      if (this.val(this.ph) === 21) this.finish(); this.render(); },
+    hit() { this.ph.push(this.draw()); sfx(500, .05); if (this.val(this.ph) > 21) this.finish(); else if (this.val(this.ph) === 21) this.stand(); this.render(); },
+    double() { if (this.chips < this.cur) return; this.chips -= this.cur; this.cur *= 2; this.ph.push(this.draw()); this.finish(); },
+    stand() { this.finish(); },
+    finish() {
+      const pv = this.val(this.ph), bjP = pv === 21 && this.ph.length === 2;
+      if (pv <= 21 && !bjP) while (this.val(this.dh) < 17) this.dh.push(this.draw());
+      const dv = this.val(this.dh), bjD = dv === 21 && this.dh.length === 2; let win = 0;
+      if (pv > 21) this.msg = 'Te veel! De bank wint.';
+      else if (bjP && !bjD) { win = this.cur * 2.5; this.msg = 'Blackjack! Je wint ' + this.cur * 1.5 + '.'; }
+      else if (dv > 21) { win = this.cur * 2; this.msg = 'De bank gaat over 21. Je wint ' + this.cur + '.'; }
+      else if (pv > dv) { win = this.cur * 2; this.msg = 'Gewonnen: ' + pv + ' tegen ' + dv + '.'; }
+      else if (pv === dv) { win = this.cur; this.msg = 'Gelijk: je krijgt je inzet terug.'; }
+      else this.msg = 'De bank wint met ' + dv + '.';
+      this.chips += win; if (win > this.cur) sfx(880, .25, 'triangle', .06, 400); else if (!win) sfx(220, .3, 'sawtooth', .04, -100);
+      if (this.chips <= 0) { this.chips = 100; this.msg += ' Je fiches zijn op: je krijgt een nieuwe stapel van 100.'; }
+      try { localStorage.setItem('pv-chips', this.chips); } catch (e) { } SCORES.submit('blackjack', this.chips).then(() => SCORES.render(this.p.querySelector('#lb'), 'blackjack', 'Meeste fiches'));
+      this.phase = 'done'; this.render();
+    },
+    render() {
+      const p = this.p, hand = (el, h, hide) => { el.innerHTML = ''; h.forEach((c, i) => { const e = cardEl(c, !(hide && i === 1)); e.style.left = i * 46 + 'px'; e.style.cursor = 'default'; el.appendChild(e); }); };
+      hand(p.querySelector('#dh'), this.dh, this.phase === 'play'); hand(p.querySelector('#ph'), this.ph);
+      p.querySelector('#dv').textContent = this.dh.length ? (this.phase === 'play' ? '' : 'Bank: ' + this.val(this.dh)) : ''; p.querySelector('#pv').textContent = this.ph.length ? 'Jij: ' + this.val(this.ph) : '';
+      p.querySelector('#msg').textContent = this.msg; p.querySelector('#chips').textContent = `Fiches: ${this.chips}` + (this.phase === 'play' ? ` · inzet ${this.cur}` : '');
+      const ctl = p.querySelector('#ctl'); ctl.innerHTML = '';
+      const btn = (t, f, dis, alt) => { const b = document.createElement('button'); b.className = 'b' + (alt ? ' alt' : ''); b.textContent = t; b.disabled = !!dis; b.onclick = f; ctl.appendChild(b); };
+      if (this.phase === 'play') { btn('Kaart (H)', () => this.hit()); btn('Pas (S)', () => this.stand()); btn('Verdubbel (D)', () => this.double(), this.ph.length !== 2 || this.chips < this.cur); }
+      else { for (const v of [5, 10, 25, 50]) btn('Inzet ' + v, () => { this.bet = v; this.render(); }, v > this.chips, this.bet !== v); btn('Delen (Enter)', () => this.deal(), this.bet > this.chips); }
+    },
+    key(e, down) { if (!down) return; if (this.phase === 'play') { if (e.code === 'KeyH') this.hit(); if (e.code === 'KeyS') this.stand(); if (e.code === 'KeyD' && this.ph.length === 2) this.double(); } else if (e.code === 'Enter') this.deal(); }
+  };
+  // ── patience (Klondike, één kaart per keer): klik een kaart en daarna de plek; dubbelklik stuurt naar de aflegstapels
+  const sol = {
+    open(p) {
+      this.p = p; const d = deck(); this.tab = []; for (let i = 0; i < 7; i++) { this.tab.push([]); for (let j = 0; j <= i; j++) { const c = d.pop(); c.up = j === i; this.tab[i].push(c); } }
+      this.stock = d; this.waste = []; this.found = [[], [], [], []]; this.sel = null; this.moves = 0; this.t0 = performance.now(); this.won = false;
+      p.insertAdjacentHTML('beforeend', `<h2>Patience</h2><div class="felt" style="position:relative;width:640px;height:540px;max-width:90vw" id="tbl"></div><div style="display:flex;justify-content:space-between;gap:14px;margin-top:10px;flex-wrap:wrap"><div class="muted" id="st"></div><div><button class="b alt" id="nw">Nieuw spel</button></div><div id="lb" style="min-width:220px"></div></div>`);
+      p.querySelector('#nw').onclick = () => { p.innerHTML = ''; const x = document.createElement('button'); x.className = 'gx'; x.textContent = 'Terug (Esc)'; x.onclick = () => closeGame(); p.appendChild(x); this.open(p); };
+      SCORES.render(p.querySelector('#lb'), 'patience', 'Beste patience-score'); this.render();
+      this.tm = setInterval(() => this.status(), 1000);
+    },
+    close() { clearInterval(this.tm); },
+    status() { const s = Math.round((performance.now() - this.t0) / 1000); this.p.querySelector('#st').textContent = this.won ? `Gewonnen in ${s} s en ${this.moves} zetten!` : `${this.moves} zetten · ${s} s`; },
+    canFound(c, f) { const t = f[f.length - 1]; return t ? t.s === c.s && c.r === t.r + 1 : c.r === 0; },
+    canTab(c, col) { const t = col[col.length - 1]; return t ? t.up && red(t) !== red(c) && c.r === t.r - 1 : c.r === 12; },
+    src(sel) { return sel.from === 'w' ? this.waste : sel.from === 'f' ? this.found[sel.i] : this.tab[sel.i]; },
+    move(sel, dest, di) {
+      const s = this.src(sel), cards = s.slice(sel.k), c = cards[0];
+      if (dest === 'f') { if (cards.length !== 1 || !this.canFound(c, this.found[di])) return false; this.found[di].push(s.pop()); }
+      else { if (!this.canTab(c, this.tab[di])) return false; this.tab[di].push(...s.splice(sel.k)); }
+      for (const col of this.tab) if (col.length && !col[col.length - 1].up) col[col.length - 1].up = true;
+      this.moves++; sfx(600, .04, 'triangle', .05);
+      if (this.found.every(f => f.length === 13)) { this.won = true; const sec = (performance.now() - this.t0) / 1000; const score = Math.max(100, Math.round(10000 - sec * 8 - this.moves * 10)); SCORES.submit('patience', score).then(() => SCORES.render(this.p.querySelector('#lb'), 'patience', 'Beste patience-score')); sfx(660, .5, 'triangle', .06, 600); this.status(); }
+      return true;
+    },
+    auto(sel) { const s = this.src(sel); if (sel.k !== s.length - 1) return false; for (let i = 0; i < 4; i++) if (this.move(sel, 'f', i)) return true; return false; },
+    click(kind, i, k) {
+      if (kind === 'stock') { if (this.stock.length) { const c = this.stock.pop(); c.up = true; this.waste.push(c); } else { this.stock = this.waste.reverse().map(c => (c.up = false, c)); this.waste = []; } this.sel = null; sfx(400, .03); this.render(); return; }
+      if (this.sel) { const ok = kind === 'f' ? this.move(this.sel, 'f', i) : kind === 't' ? this.move(this.sel, 't', i) : false; const same = this.sel.from === (kind === 'w' ? 'w' : kind) && this.sel.i === i && this.sel.k === k; this.sel = null; if (ok || same) { this.render(); return; } }
+      if (kind === 'w' && this.waste.length) this.sel = { from: 'w', k: this.waste.length - 1 };
+      else if (kind === 't' && k != null && this.tab[i][k] && this.tab[i][k].up) this.sel = { from: 't', i, k };
+      else if (kind === 'f' && this.found[i].length) this.sel = { from: 'f', i, k: this.found[i].length - 1 };
+      this.render();
+    },
+    render() {
+      const T = this.p.querySelector('#tbl'); T.innerHTML = ''; const X = i => 14 + i * 88;
+      const put = (el, x, y, f, dbl) => { el.style.left = x + 'px'; el.style.top = y + 'px'; el.onclick = ev => { ev.stopPropagation(); f(); }; if (dbl) el.ondblclick = ev => { ev.stopPropagation(); if (dbl()) this.render(); }; T.appendChild(el); return el; };
+      const slot = (x, y, f, label) => { const s = document.createElement('div'); s.className = 'slot'; if (label) s.innerHTML = `<div style="display:flex;height:100%;align-items:center;justify-content:center;opacity:.5;font-size:26px">${label}</div>`; return put(s, x, y, f); };
+      slot(X(0), 12, () => this.click('stock'), '↻'); if (this.stock.length) put(cardEl(this.stock[0], false), X(0), 12, () => this.click('stock'));
+      slot(X(1), 12, () => { }); if (this.waste.length) { const c = this.waste[this.waste.length - 1], e = put(cardEl(c), X(1), 12, () => this.click('w'), () => this.auto({ from: 'w', k: this.waste.length - 1 })); if (this.sel && this.sel.from === 'w') e.classList.add('sel'); }
+      for (let i = 0; i < 4; i++) { slot(X(3 + i), 12, () => this.click('f', i), SUITS[i]); const f = this.found[i]; if (f.length) { const e = put(cardEl(f[f.length - 1]), X(3 + i), 12, () => this.click('f', i)); if (this.sel && this.sel.from === 'f' && this.sel.i === i) e.classList.add('sel'); } }
+      for (let i = 0; i < 7; i++) { slot(X(i), 124, () => this.click('t', i, null)); let y = 124; this.tab[i].forEach((c, k) => { const e = put(cardEl(c, c.up), X(i), y, () => this.click('t', i, k), c.up ? () => this.auto({ from: 't', i, k }) : null); if (this.sel && this.sel.from === 't' && this.sel.i === i && k >= this.sel.k) e.classList.add('sel'); y += c.up ? 24 : 10; }); }
+      this.status();
+    },
+    key() { }
+  };
+  return { bj, sol };
+})();
+
+// ═════════════════════════ SPELMENU (tv op het middenblok, of P waar je ook bent)
+const MENU = {
+  open(p) {
+    const item = (t, d, f, soon) => `<button class="tile${soon ? ' soon' : ''}" data-k="${f}"><b>${t}</b><span class="muted">${d}</span></button>`;
+    p.insertAdjacentHTML('beforeend', `<h2>Polyverse spellen</h2><div class="muted">Kies een spel. Je kan ook ter plaatse spelen: E bij de arcadekast of het whiteboard, K als je aan de eettafel zit.</div>
+      <div class="tiles">${item('Arcadekast', 'Polygon Defender, Kabelkluwen en Gevelbreker', 'arc')}${item('Blackjack', 'Tegen de bank, met fiches', 'bj')}${item('Patience', 'Klondike, één kaart per keer', 'sol')}${item('Whiteboard', 'Tekenen in het sas, iedereen ziet mee', 'wb')}${item('Zombie-aanval', 'Binnenkort', '', 1)}${item('Muismodus', 'Binnenkort', '', 1)}</div>
+      <h2 style="margin-top:16px;font-size:16px">Ranglijsten</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px" id="lbs"></div>`);
+    p.querySelectorAll('.tile[data-k]').forEach(b => b.onclick = () => { const k = b.dataset.k; if (k === 'arc') openGame(ARC); else if (k === 'bj') openGame(CARDS.bj); else if (k === 'sol') openGame(CARDS.sol); else if (k === 'wb') openGame(WB); });
+    const lbs = p.querySelector('#lbs'); for (const [g, t] of [['arc_defender', 'Polygon Defender'], ['arc_kabel', 'Kabelkluwen'], ['arc_gevel', 'Gevelbreker'], ['blackjack', 'Blackjack (fiches)'], ['patience', 'Patience']]) { const d = document.createElement('div'); lbs.appendChild(d); SCORES.render(d, g, t); }
+  },
+  key() { }
+};
+SPOTS.push({ x: 6.22, z: 5.2, tx: 6.22, tz: 5.85, r: 1.2, label: 'spelen op de arcadekast', act: () => openGame(ARC) });
+SPOTS.push({ x: 7.5, z: 6.7, tx: 6.85, tz: 6.7, r: 1.6, label: 'spelmenu op de tv', act: () => openGame(MENU) });
+for (const s of SEATS) if (s.chair && s.cx > 5 && s.cx < 10 && s.cz > .9 && s.cz < 3.2) s.cards = true;   // stoelen aan de eettafel
+// tv toont het spelmenu
+{ const t = ctex(512, 288, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#141a2e'); gr.addColorStop(1, '#2a1f3d'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#ffd34d'; g.font = 'bold 44px Archivo, sans-serif'; g.textAlign = 'center'; g.fillText('POLYVERSE', w / 2, 96); g.fillStyle = '#f4f1ea'; g.font = '600 24px Archivo, sans-serif'; g.fillText('spellen', w / 2, 132);
+    g.font = '18px Archivo, sans-serif'; g.fillStyle = '#b9c3e0'; ['Arcade · Blackjack · Patience · Whiteboard', 'Druk op E voor het menu'].forEach((s, i) => g.fillText(s, w / 2, 190 + i * 32)); }, 1);
+  const tv = new THREE.Mesh(new THREE.PlaneGeometry(1.34, .74), new THREE.MeshBasicMaterial({ map: t })); tv.position.set(6.8545, 1.51, 6.7); tv.rotation.y = Math.PI / 2; WORLD.add(tv); }
+
 frame();
 </script>
 

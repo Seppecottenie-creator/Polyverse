@@ -14,6 +14,8 @@ Een 3D-wandeling door het Polygon-bureau, gebouwd met [three.js](https://threejs
 | Enter of T | chatten |
 | X | zwaaien |
 | M | kaart groter of kleiner |
+| P | spelmenu |
+| K | kaarten (als je aan de eettafel zit) |
 | G / F | beeldkwaliteit wisselen / beelden per seconde tonen |
 
 ## Mappen
@@ -56,3 +58,34 @@ De anon-sleutel mag publiek in een website staan; daar is hij voor bedoeld. Gebr
 Iedereen die de link opent, kiest zijn eigen collega-personage. Die naam staat boven zijn hoofd en in de lijst rechtsboven. Er is geen login: iedereen met de link kan binnen. Wil je dat afschermen met echte accounts, dan kan dat later met Supabase Auth.
 
 Zonder ingevulde Supabase-gegevens start het spel als solo-wandeling.
+
+## Spellen
+
+- **Arcadekast** (E bij de kast in de lounge): Polygon Defender, Kabelkluwen en Gevelbreker.
+- **Whiteboard** (E in het sas): tekenen met de muis; iedereen ziet de tekening en ze blijft bewaard.
+- **Kaarten** (K als je aan de eettafel zit, of via het menu): blackjack en patience.
+- **Spelmenu**: E bij de tv op het middenblok, of P waar je ook bent. Daar staan ook de ranglijsten.
+
+### Ranglijsten en whiteboard bewaren op GitHub Pages
+
+Op claude.ai werkt dit vanzelf. Voor de GitHub-versie voer je één keer deze SQL uit in Supabase (SQL Editor → New query → Run). Zonder deze tabellen werkt alles ook, maar dan blijven scores op je eigen toestel en wordt het whiteboard alleen live gedeeld met wie op dat moment online is.
+
+```sql
+create table if not exists polyverse_scores (
+  id bigint generated always as identity primary key,
+  game text not null, name text not null, score integer not null,
+  created_at timestamptz default now()
+);
+alter table polyverse_scores enable row level security;
+create policy "scores lezen" on polyverse_scores for select using (true);
+create policy "scores toevoegen" on polyverse_scores for insert
+  with check (score >= 0 and score < 10000000 and char_length(name) <= 30 and char_length(game) <= 30);
+
+create table if not exists polyverse_kv (
+  key text primary key, value jsonb, updated_at timestamptz default now()
+);
+alter table polyverse_kv enable row level security;
+create policy "kv lezen" on polyverse_kv for select using (true);
+create policy "kv toevoegen" on polyverse_kv for insert with check (key = 'whiteboard');
+create policy "kv bijwerken" on polyverse_kv for update using (key = 'whiteboard') with check (key = 'whiteboard');
+```
