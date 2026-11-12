@@ -2115,7 +2115,8 @@ function frame() {
   placeCamera(third ? 0 : Math.sin(t0) * .025);
   const nd = findDoor(), ns = findSeat(), ndd = nd ? Math.hypot(nd.cx - P.x, nd.cz - P.z) : 1e9;
   const nsp = findSpot();
-  if (SIT.seat) { hintEl.style.display = SIT.phase === 3 ? 'block' : 'none'; hintEl.innerHTML = '<b>E</b>opstaan (of wandel weg)' + (SIT.seat.cards && DEV.on ? ' · <b>K</b>kaarten' : ''); }
+  if (typeof ZB !== 'undefined' && ZB.active) hintEl.style.display = 'none';
+  else if (SIT.seat) { hintEl.style.display = SIT.phase === 3 ? 'block' : 'none'; hintEl.innerHTML = '<b>E</b>opstaan (of wandel weg)' + (SIT.seat.cards && DEV.on ? ' · <b>K</b>kaarten' : ''); }
   else if (nsp && nsp.d < ndd && (!ns || nsp.d < ns.d)) { hintEl.style.display = 'block'; hintEl.innerHTML = `<b>E</b>${nsp.s.label}`; }
   else if (ns && ns.d < ndd) { hintEl.style.display = 'block'; hintEl.innerHTML = `<b>E</b>gaan zitten: ${SEAT_LABEL[ns.s.kind] || 'stoel'}`; }
   else { hintEl.style.display = nd ? 'block' : 'none'; if (nd) hintEl.innerHTML = `<b>E</b>${nd.target ? 'sluiten' : 'openen'}: ${nd.name}`; }
@@ -2625,6 +2626,7 @@ const WPN = (() => {
   return W;
 })();
 let ZCLIPS = null;
+let ZMODELS = null; const zombieModels = () => ZMODELS || (ZMODELS = fetchGltfMulti('models/zombies.gltf.json').then(g => { const list = g.scene.children.slice(); list.forEach(o => o.traverse(b => { if (b.isBone && !b.name.startsWith('mixamorig')) b.name = 'mixamorig' + b.name; })); return list; }).catch(e => { console.warn('zombies niet geladen', e); return null; }));
 const zombieClips = () => ZCLIPS || (ZCLIPS = fetch(new URL('models/zombie.anim.json', location.href).href).then(r => r.ok ? r.json() : null).then(j => j && Object.fromEntries(Object.entries(j).map(([k, v]) => [k, THREE.AnimationClip.parse(v)]))).catch(() => null));
 // ═════════════════════════ ZOMBIE-AANVAL: E bij de garagepoort in de koer. Golven zombies komen langs de deuren binnen.
 //   Tijdelijke zombies = bleke versies van de personages; echte zombiemodellen en -animaties kunnen later in de plaats komen.
@@ -2661,17 +2663,22 @@ const ZB = (() => {
     const z = { x: sx + (Math.random() - .5) * .6, z: sz + (Math.random() - .5) * .6, yaw: 0, hp: (2 + Math.floor(Z.wave / 2)) * (big ? 3 : 1), sp: (fast ? 1.35 : .62 + Z.wave * .05) * (big ? .8 : 1), fast, big, atk: 0, atkT: 0, hitT: 0, dead: 0, flash: 0, tinted: false };
     z.av = zombieBody(z); if (big) z.av.scale.setScalar(1.25); scene.add(z.av); Z.list.push(z);
   }
+  const ZFACE = Math.PI;
   function zombieBody(z) {
     const root = new THREE.Group(); root.rotation.order = 'YXZ'; const def = AVATARS[Math.random() * AVATARS.length | 0];
-    Promise.all([loadGlb(def.glb), zombieClips()]).then(([g, clips]) => {
+    Promise.all([zombieModels(), zombieClips()]).then(async ([zm, clips]) => {
+      if (z.gone) return; let g = null;
+      if (zm && zm.length) { g = { scene: zm[Math.random() * zm.length | 0] }; z.real = true; } else g = await loadGlb(def.glb);
       if (z.gone) return;
       if (!g || !clips) { const av = makeAvatar(def); root.add(av); z.fb = av; av.userData.post = () => { const B = av.userData.B; if (!B || z.dead) return; for (const sd of ['Left', 'Right']) { const a = B(sd + 'Arm'), f = B(sd + 'ForeArm'), h = B(sd + 'Hand'); if (a && f && h) { const fw = V(-Math.sin(z.yaw), -.15, -Math.cos(z.yaw)); zaim(a, f, fw); zaim(f, h, fw); } } }; return; }
-      const model = SkeletonUtils.clone(g.scene); model.rotation.y = Math.PI; model.updateMatrixWorld(true);
+      const model = SkeletonUtils.clone(g.scene); model.rotation.y = z.real ? ZFACE : Math.PI; model.updateMatrixWorld(true);
       const bb = new THREE.Box3().setFromObject(model); model.scale.multiplyScalar(1.98 / Math.max(.5, bb.max.y - bb.min.y)); model.updateMatrixWorld(true); model.position.y = -new THREE.Box3().setFromObject(model).min.y;
       model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
       const hips = model.getObjectByName('mixamorigHips'), rest = hips ? hips.position.clone() : new THREE.Vector3();
       const mx = new THREE.AnimationMixer(model), A = {};
-      for (const [k, c] of Object.entries(clips)) { const cc = c.clone(); for (const t of cc.tracks) if (t.name === 'mixamorigHips.position') { const v = t.values; for (let n = 0; n < v.length; n += 3) { v[n] += rest.x; v[n + 1] += rest.y; v[n + 2] += rest.z; } } A[k] = mx.clipAction(cc); }
+      const sp = model.getObjectByName('mixamorigSpine'), flip = z.real && sp && sp.position.y < 0, RX = new THREE.Quaternion(1, 0, 0, 0), _q = new THREE.Quaternion();
+      for (const [k, c] of Object.entries(clips)) { const cc = c.clone(); if (flip) for (const t of cc.tracks) { const bn = t.name.split('.')[0], hipQ = t.name === 'mixamorigHips.quaternion', kid = /^mixamorig(Spine|LeftUpLeg|RightUpLeg)\.quaternion$/.test(t.name); if (!hipQ && !kid) continue; t.values = t.values.slice(); const v = t.values; for (let n = 0; n < v.length; n += 4) { _q.fromArray(v, n); if (hipQ) _q.multiply(RX); else _q.premultiply(RX); _q.toArray(v, n); } }
+        for (const t of cc.tracks) if (t.name === 'mixamorigHips.position') { const v = t.values; for (let n = 0; n < v.length; n += 3) { v[n] += rest.x; v[n + 1] += rest.y; v[n + 2] += rest.z; } } A[k] = mx.clipAction(cc); }
       for (const k of ['attack', 'attack2', 'hit', 'death', 'dying']) if (A[k]) { A[k].setLoop(THREE.LoopOnce, 1); A[k].clampWhenFinished = true; }
       root.add(model); z.model = model; z.mx = mx; z.A = A; zplay(z, z.dead ? 'death' : 'idle', 0);
     });
@@ -2680,7 +2687,7 @@ const ZB = (() => {
   function zplay(z, k, fade = .25, ts = 1) { if (!z.A || !z.A[k]) return; const a = z.A[k]; a.timeScale = ts; if (z.cur === k) return; a.reset(); a.setEffectiveWeight(1); a.play(); if (z.curA && fade > 0) z.curA.crossFadeTo(a, fade, false); else if (z.curA) z.curA.stop(); z.curA = a; z.cur = k; }
   const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
   function zaim(b, c, dir) { b.getWorldPosition(_a); c.getWorldPosition(_b); _b.sub(_a).normalize(); _q.setFromUnitVectors(_b, dir.clone().normalize()); b.getWorldQuaternion(_q2); b.parent.getWorldQuaternion(_q3).invert(); b.quaternion.copy(_q3.multiply(_q.multiply(_q2))); b.updateMatrixWorld(true); }
-  function tint(z) { const m = z.model || (z.fb && z.fb.userData.model); if (!m || z.tinted) return; z.tinted = true; const col = new THREE.Color(ZTINT[Math.random() * 3 | 0]); m.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.color.multiply(col); o.material.emissive = new THREE.Color('#0d1a08'); z.mat = z.mat || []; z.mat.push(o.material); } }); }
+  function tint(z) { const m = z.model || (z.fb && z.fb.userData.model); if (!m || z.tinted) return; z.tinted = true; const col = new THREE.Color(z.real ? '#ffffff' : ZTINT[Math.random() * 3 | 0]); m.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.color.multiply(col); o.material.emissive = new THREE.Color(z.real ? '#000000' : '#0d1a08'); z.mat = z.mat || []; z.mat.push(o.material); } }); }
   // ── HUD
   function hud() {
     const h = document.createElement('div'); h.id = 'zhud'; h.innerHTML = `<style>
@@ -2774,7 +2781,7 @@ const ZB = (() => {
         else zplay(z, 'idle', .4);
         z.mx.update(dt);
       } else if (z.fb) z.fb.userData.anim(dt, move > 0 ? z.sp * WS * .9 : 0);
-      if (z.mat) { const f = z.flash > 0 ? 1 : 0; for (const m of z.mat) m.emissive.setRGB(.02 + f * .6, .045 * (1 - f), .01 * (1 - f)); } z.flash -= dt;
+      if (z.mat) { const f = z.flash > 0 ? 1 : 0; for (const m of z.mat) m.emissive.setRGB((z.real ? 0 : .02) + f * .6, (z.real ? 0 : .045) * (1 - f), (z.real ? 0 : .01) * (1 - f)); } z.flash -= dt;
     }
     Z.list = Z.list.filter(z => { if (z.dead > (z.mx ? 4.6 : 3.2)) { z.gone = true; scene.remove(z.av); return false; } return true; });
     Z.hurtT -= dt; const hurt = Z.hud && Z.hud.querySelector('.hurt'); if (hurt) hurt.style.opacity = Math.max(0, Z.hurtT * 2.5) + (Z.hp < 30 ? .25 : 0);
