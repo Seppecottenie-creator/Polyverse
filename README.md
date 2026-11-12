@@ -21,6 +21,8 @@ Een 3D-wandeling door het Polygon-bureau, gebouwd met [three.js](https://threejs
 ```
 index.html                    het volledige spel (gebouw, personages, besturing, multiplayer)
 models/personage1.gltf.json   eerste personage (Meshy → Mixamo), met animaties idle, look, walk, wave, wave2
+models/zit.anim.json          Mixamo-animaties Stand To Sit en Sit To Stand, gedeeld door alle personages
+models/zetel.gltf.json        grijze hoekzetel (uit 3ds Max)
 ```
 
 Een nieuw personage voeg je zo toe:

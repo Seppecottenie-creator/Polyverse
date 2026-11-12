@@ -990,7 +990,7 @@ const SOFA_PROC = grp();
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals(); mk(geo, vel, g); }
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) cylB(g, V(sx * .82, .24, sz * .24), V(sx * .9, 0, sz * .3), .022, M.black, 8);
   place(g, 8.75, 0, 9.2, 0); addCol(7.8, 9.7, 8.85, 9.55); mapFurn.push([7.65, 9.55, 8.85, 9.55]);
-  for (const x of [8.35, 9.15]) addSeat({ kind: 'zetel', x, z: 9.33, yaw: 0, h: .5 });
+  for (const x of [8.35, 9.15]) addSeat({ kind: 'zetel', x, z: 9.2, yaw: 0, h: .5 });
 }
 place(coffeeTable(.45, .42), 8.8, 0, 6.85, 0, { col: true }); place(coffeeTable(.36, .35), 8.55, 0, 7.6, 0, { col: true });
 place(coffeeTable(.26, .5), 10.0, 0, 9.3, 0, { col: true });
@@ -1447,16 +1447,19 @@ function findDoor() {
   return best;
 }
 function toggleDoor() { const d = findDoor(); if (d) { d.target = d.target ? 0 : 1; pushDoors(); } }
-// ── zitten: E bij een stoel, zetel, toilet of bank; stoelen worden eerst achteruit getrokken en daarna weer aangeschoven
-const SIT = { seat: null, phase: 0, t: 0, from: null, yaw0: 0, pyaw0: 0, bodyYaw: 0, pull: 0 };
+// ── zitten: E bij een stoel, zetel, toilet of bank. Met de Mixamo-animaties stap je eerst voor de zitting (de stoel wordt achteruit
+//    getrokken), draai je je om en ga je zitten; de stoel schuift met je mee aan. Opstaan gaat omgekeerd, daarna stap je opzij.
+const SIT = { seat: null, phase: 0, t: 0, from: null, yaw0: 0, pyaw0: 0, bodyYaw: 0, pull: 0, mode: 'anim', reach: 0, dur: .5, leave: null, leaveFrom: null };
+const PULL_OUT = .58, PULL_IN = .14;
 const SEAT_LABEL = { stoel: 'stoel', zetel: 'zetel', toilet: 'toilet', bank: 'picknickbank' };
 const sstep = (a, b, t) => { const x = Math.max(0, Math.min(1, (t - a) / (b - a))); return x * x * (3 - 2 * x); };
 const angTo = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 function seatPoint(s, pull) { return s.chair ? [s.x + s.bx * pull, s.z + s.bz * pull] : [s.x, s.z]; }
+function standPoint(s, pull, reach) { const [sx, sz] = seatPoint(s, pull); return [sx - Math.sin(s.yaw) * reach, sz - Math.cos(s.yaw) * reach]; }
 function seatTaken(s) { for (const r of NET.remotes.values()) if (r.tgt && r.tgt.seat === s.id) return true; return false; }
 function findSeat() {
   if (SIT.seat) return null; const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 1.3;
-  for (const s of SEATS) { const dx = s.x - P.x, dz = s.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > -.3 && (s.chair || dx * Math.sin(s.yaw) + dz * Math.cos(s.yaw) > .05) && !seatTaken(s)) { best = s; bd = d; } }   // zetel, toilet en bank enkel langs de voorkant
+  for (const s of SEATS) { const dx = s.x - P.x, dz = s.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > -.3 && (s.chair || s.kind === 'bank' || dx * Math.sin(s.yaw) + dz * Math.cos(s.yaw) > .05) && !seatTaken(s)) { best = s; bd = d; } }   // zetel en toilet enkel langs de voorkant
   return best && { s: best, d: bd };
 }
 function interact() {
@@ -1464,33 +1467,49 @@ function interact() {
   const nd = findDoor(), ns = findSeat(), dd = nd ? Math.hypot(nd.cx - P.x, nd.cz - P.z) : 1e9;
   if (ns && ns.d < dd) sitDown(ns.s); else if (nd) toggleDoor();
 }
-function sitDown(s) { Object.assign(SIT, { seat: s, phase: 1, t: 0, from: { x: P.x, z: P.z }, yaw0: myAvatar.rotation.y, pyaw0: P.yaw, bodyYaw: myAvatar.rotation.y, pull: 0 }); myAvatar.userData.sit.S = s.h * WS; keys.clear(); }
-function standUp() { if (SIT.phase === 2) { SIT.phase = 3; SIT.t = 0; } }
+function sitDown(s) {
+  const ud = myAvatar.userData, mode = s.kind !== 'bank' && ud.canAnimSit && ud.canAnimSit() ? 'anim' : 'pose', reach = mode === 'anim' ? ud.seat.reach / WS : 0;
+  const [tx, tz] = standPoint(s, s.chair ? PULL_OUT : 0, reach), dist = Math.hypot(tx - P.x, tz - P.z);
+  Object.assign(SIT, { seat: s, phase: 1, t: 0, mode, reach, from: { x: P.x, z: P.z }, yaw0: myAvatar.rotation.y, pyaw0: P.yaw, bodyYaw: myAvatar.rotation.y, pull: 0, dur: Math.max(.5, dist * WS / 1.2) });
+  ud.sit.S = s.h * WS; keys.clear();
+}
+function standUp() { if (SIT.phase === 3) { SIT.phase = 4; SIT.t = 0; if (SIT.mode === 'anim') myAvatar.userData.sitEnd(); } }
 function updateSit(dt) {
-  const s = SIT.seat; if (!s) return; SIT.t += dt; const t = SIT.t, us = myAvatar.userData.sit; us.S = s.h * WS;
+  const s = SIT.seat; if (!s) return; SIT.t += dt; const t = SIT.t, us = myAvatar.userData.sit, anim = SIT.mode === 'anim'; us.S = s.h * WS;
   if (SIT.phase === 1) {
-    if (s.chair) SIT.pull = .38 * sstep(0, .35, t) - .26 * sstep(.85, 1.3, t);
-    const [sx, sz] = seatPoint(s, SIT.pull), e = sstep(.12, .75, t);
-    P.x = SIT.from.x + (sx - SIT.from.x) * e; P.z = SIT.from.z + (sz - SIT.from.z) * e;
-    SIT.bodyYaw = angTo(SIT.yaw0, s.yaw, e); P.yaw = angTo(SIT.pyaw0, s.yaw, e); us.target = t > .38 ? 1 : 0;
-    if (t >= 1.35) SIT.phase = 2;
-  } else if (SIT.phase === 2) {
-    if (s.chair) SIT.pull = .12; const [sx, sz] = seatPoint(s, SIT.pull); P.x = sx; P.z = sz; SIT.bodyYaw = s.yaw; us.target = 1;
+    if (s.chair) SIT.pull = PULL_OUT * sstep(0, Math.min(.45, SIT.dur), t);
+    const [tx, tz] = standPoint(s, SIT.pull, SIT.reach), e = sstep(0, SIT.dur, t);
+    P.x = SIT.from.x + (tx - SIT.from.x) * e; P.z = SIT.from.z + (tz - SIT.from.z) * e;
+    SIT.bodyYaw = angTo(SIT.yaw0, s.yaw, sstep(SIT.dur * .35, SIT.dur, t)); P.yaw = angTo(SIT.pyaw0, s.yaw, e);
+    if (t >= SIT.dur) { SIT.phase = 2; SIT.t = 0; if (anim) myAvatar.userData.sitStart(s.h * WS); else us.target = 1; }
+  } else if (SIT.phase === 2 || SIT.phase === 3) {
+    const T = anim ? 2.25 : 1.0; if (s.chair) SIT.pull = PULL_OUT - (PULL_OUT - PULL_IN) * sstep(anim ? 1.75 : .5, T + .25, SIT.phase === 3 ? 99 : t);
+    const [tx, tz] = standPoint(s, SIT.pull, SIT.reach); P.x = tx; P.z = tz; SIT.bodyYaw = s.yaw;
+    if (SIT.phase === 2 && t >= T + .25) { SIT.phase = 3; SIT.t = 0; }
+  } else if (SIT.phase === 4) {
+    if (s.chair) SIT.pull = PULL_IN + (PULL_OUT - PULL_IN) * sstep(0, .6, t);
+    if (!anim) us.target = 0;
+    const [tx, tz] = standPoint(s, SIT.pull, SIT.reach); P.x = tx; P.z = tz;
+    if (t >= (anim ? 2.3 : .9)) {
+      SIT.phase = 5; SIT.t = 0; SIT.leaveFrom = { x: P.x, z: P.z };
+      if (s.chair) { const rx = Math.cos(s.yaw), rz = -Math.sin(s.yaw), sg = (SIT.from.x - P.x) * rx + (SIT.from.z - P.z) * rz >= 0 ? 1 : -1; SIT.leave = { x: P.x + rx * sg * .62, z: P.z + rz * sg * .62 }; }
+      else SIT.leave = anim ? { x: P.x, z: P.z } : { x: SIT.from.x, z: SIT.from.z };
+    }
   } else {
-    us.target = 0; if (s.chair) SIT.pull = .12 + .26 * sstep(0, .4, t) - .38 * sstep(.85, 1.2, t);
-    const [sx, sz] = seatPoint(s, SIT.pull), e = sstep(.35, 1, t);
-    P.x = sx + (SIT.from.x - sx) * e; P.z = sz + (SIT.from.z - sz) * e;
-    if (t >= 1.25) { SIT.seat = null; SIT.phase = 0; SIT.pull = 0; }
+    const e = sstep(0, .6, t); P.x = SIT.leaveFrom.x + (SIT.leave.x - SIT.leaveFrom.x) * e; P.z = SIT.leaveFrom.z + (SIT.leave.z - SIT.leaveFrom.z) * e;
+    if (s.chair) SIT.pull = PULL_OUT * (1 - sstep(.35, .95, t));
+    if (t >= .95) { SIT.seat = null; SIT.phase = 0; SIT.pull = 0; collide(); }
   }
 }
 function updateChairs(dt) {
   for (const s of SEATS) {
     if (!s.chair) continue; let tgt = 0;
-    if (SIT.seat === s) tgt = SIT.pull; else for (const r of NET.remotes.values()) if (r.tgt && r.tgt.seat === s.id) tgt = .12;
+    if (SIT.seat === s) tgt = SIT.pull; else for (const r of NET.remotes.values()) if (r.tgt && r.tgt.seat === s.id) tgt = PULL_IN;
     s.pull += (tgt - s.pull) * (SIT.seat === s ? 1 : Math.min(1, dt * 4)); s.chair.position.set(s.cx + s.bx * s.pull, 0, s.cz + s.bz * s.pull);
   }
 }
 const sitW = av => { const u = av.userData.sit; return u ? u.w * u.w * (3 - 2 * u.w) : 0; };
+const seatW = av => Math.max(sitW(av), av.userData.seatW ? av.userData.seatW() : 0);
 function collide() {
   for (let it = 0; it < 3; it++) for (const c of colliders) {
     if (c.on && !c.on()) continue;
@@ -1566,32 +1585,48 @@ function makeAvatar(def) {
   if (def.glb) return makeGlbAvatar(def);
   return makeProef(def);
 }
+// Mixamo-animaties om te gaan zitten en op te staan (gedeeld door alle personages; zelfde skelet)
+let SIT_CLIPS = null;
+function sitClips() {
+  if (!SIT_CLIPS) SIT_CLIPS = fetch(new URL('models/zit.anim.json', location.href).href).then(r => r.ok ? r.json() : null)
+    .then(j => j && { zitten: THREE.AnimationClip.parse(j.zitten), opstaan: THREE.AnimationClip.parse(j.opstaan) }).catch(e => { console.warn('zitanimaties niet geladen', e); return null; });
+  return SIT_CLIPS;
+}
 function makeGlbAvatar(def) {
-  const root = new THREE.Group(); let stand = makeProef(PROEF); root.add(stand); let ctl = null, drop = null; const pend = { wave: false };
-  const sit = root.userData.sit = { w: 0, target: 0, S: .56 }; stand.userData.sit = sit;
+  const root = new THREE.Group(); let stand = makeProef(PROEF); root.add(stand); let ctl = null; const pend = { wave: false };
+  const sit = root.userData.sit = { w: 0, target: 0, S: .56 }; stand.userData.sit = sit;            // procedurele zithouding (picknickbank, of zolang de animaties laden)
+  const sa = root.userData.seat = { phase: null, t: 0, S: .56, reach: .55, ready: false };          // zitten met de Mixamo-animaties
   root.userData.anim = (dt, speed) => { if (!ctl) return stand.userData.anim(dt, speed); sit.w += Math.sign(sit.target - sit.w) * Math.min(Math.abs(sit.target - sit.w), dt * 1.9); return ctl(dt, speed); };
-  root.userData.sitDrop = S => drop ? drop(S) : stand.userData.sitDrop(S);
+  root.userData.sitDrop = S => ctl ? 0 : stand.userData.sitDrop(S);
+  root.userData.canAnimSit = () => !!(ctl && sa.ready);
+  root.userData.sitStart = S => { sa.S = S; sa.phase = 'down'; sa.t = 0; if (sa.start) sa.start(); };
+  root.userData.sitEnd = () => { if (sa.phase === 'down' || sa.phase === 'seated') { sa.phase = 'up'; sa.t = 0; if (sa.up) sa.up(); } };
+  root.userData.seatW = () => sa.phase === 'down' ? sstep(.2, 2.0, sa.t) : sa.phase === 'seated' ? 1 : sa.phase === 'up' ? 1 - sstep(.3, 1.9, sa.t) : 0;
   root.userData.wave = () => ctl ? pend.fire() : stand.userData.wave();
   loadGlb(def.glb).then(g => {
     if (!g) return; const model = SkeletonUtils.clone(g.scene); model.rotation.y = Math.PI;
-    { model.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(model), k = (def.h || 1.98) / Math.max(.5, bb.max.y - bb.min.y); model.scale.multiplyScalar(k); model.position.y = -.035 * k; }
+    model.updateMatrixWorld(true); let bb = new THREE.Box3().setFromObject(model); model.scale.multiplyScalar((def.h || 1.98) / Math.max(.5, bb.max.y - bb.min.y));
     model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; if (o.material) { o.material.envMapIntensity = .5; } } });
+    const B = n => model.getObjectByName('mixamorig' + n), wp = (o, v = new THREE.Vector3()) => o.getWorldPosition(v), V0 = new THREE.Vector3();
+    // vast punt aan de voeten: hoogte van enkel- en teenbot boven de zool, gemeten in de rusthouding
+    model.updateMatrixWorld(true); bb = new THREE.Box3().setFromObject(model); const feet = [];
+    for (const sd of ['Left', 'Right']) for (const n of ['Foot', 'ToeBase']) { const b = B(sd + n); if (b) feet.push([b, wp(b).y - bb.min.y]); }
+    const hips = B('Hips'), rest = hips ? hips.position.clone() : null; root.userData.head = B('Head');
     root.remove(stand); root.add(model);
-    const mx = new THREE.AnimationMixer(model), A = {};
+    const mx = new THREE.AnimationMixer(model), A = {}; let Z = null, O = null;
     for (const c of g.animations) { const a = mx.clipAction(c); A[c.name] = a; a.play(); a.setEffectiveWeight(0); }
     for (const k of ['wave2', 'look']) if (A[k]) { A[k].setLoop(THREE.LoopOnce, 1); A[k].clampWhenFinished = true; }
     const st = { wk: 0, sw: 0, special: null, specT: 0, idleT: 0 };
-    // zithouding: vanuit de rusthouding de dijen naar voren, de schenen naar beneden en de handen op de dijen, berekend op het skelet zelf
-    const B = n => model.getObjectByName('mixamorig' + n), wp = o => o.getWorldPosition(new THREE.Vector3()), sitCache = new Map();
+    // procedurele zithouding: vanuit de rusthouding de dijen naar voren, de schenen naar beneden en de handen op de dijen
+    const sitCache = new Map();
     const withRoot0 = fn => { const p = root.position.clone(), q = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true); try { return fn(); } finally { root.position.copy(p); root.quaternion.copy(q); root.updateMatrixWorld(true); } };
-    const idlePose = () => { for (const a of Object.values(A)) a.setEffectiveWeight(0); for (const a of sitCache.values()) a.setEffectiveWeight(0); if (A.idle) A.idle.setEffectiveWeight(1); mx.update(0); root.updateMatrixWorld(true); };
-    const hipsY = B('Hips') ? withRoot0(() => { idlePose(); return wp(B('Hips')).y; }) : 1, clear = .11 * (def.h || 1.98) / 1.8;
-    drop = S => S + clear - hipsY;
+    const idlePose = () => { for (const a of Object.values(A)) a.setEffectiveWeight(0); for (const a of sitCache.values()) a.setEffectiveWeight(0); for (const a of [Z, O]) if (a) a.setEffectiveWeight(0); if (A.idle) A.idle.setEffectiveWeight(1); mx.update(0); model.position.y = 0; root.updateMatrixWorld(true); };
+    const hipsY = hips ? withRoot0(() => { idlePose(); return wp(hips).y; }) : 1, clear = .11 * (def.h || 1.98) / 1.8;
     const aim = (b, c, dir) => { const p = wp(b), cur = wp(c).sub(p).normalize(), rq = new THREE.Quaternion().setFromUnitVectors(cur, dir.clone().normalize()), bw = b.getWorldQuaternion(new THREE.Quaternion()), pw = b.parent.getWorldQuaternion(new THREE.Quaternion()).invert(); b.quaternion.copy(pw.multiply(rq.multiply(bw))); b.updateMatrixWorld(true); };
     const sitAction = S => {
       const key = Math.round(S * 20); if (sitCache.has(key)) return sitCache.get(key);
       const clip = withRoot0(() => {
-        idlePose(); const yoff = drop(S), hip = wp(B('Hips'));
+        idlePose(); const yoff = S + clear - hipsY, hip = wp(hips);
         for (const sd of ['Left', 'Right']) {
           const ul = B(sd + 'UpLeg'), lg = B(sd + 'Leg'), ft = B(sd + 'Foot'), toe = B(sd + 'ToeBase'); if (!ul || !lg || !ft) continue;
           const side = Math.sign(wp(ul).x - hip.x) || 1, thigh = wp(lg).distanceTo(wp(ul)), shin = wp(ft).distanceTo(wp(lg)), ank = wp(ft).y;
@@ -1604,18 +1639,45 @@ function makeGlbAvatar(def) {
       });
       const a = mx.clipAction(clip); a.play(); a.setEffectiveWeight(0); sitCache.set(key, a); return a;
     };
-    pend.fire = () => { const w = Math.random() < .5 && A.wave ? A.wave : (A.wave2 || A.wave); if (!w) return; w.reset(); w.play(); st.special = w; st.specT = w === A.wave ? 1.7 : w.getClip().duration - .15; };
+    // Mixamo: 'zitten' (Stand To Sit) en 'opstaan' (Sit To Stand); de heupbeweging is relatief en wordt op de rustpositie van dit skelet gezet
+    if (hips) sitClips().then(sc => {
+      if (!sc) return;
+      const zt = sc.zitten.tracks.find(t => t.name === 'mixamorigHips.position'); if (!zt) return;
+      const n = zt.values.length, zEnd = new THREE.Vector3(zt.values[n - 3], zt.values[n - 2], zt.values[n - 1]);
+      const prep = (c, add) => { const cc = c.clone(); for (const t of cc.tracks) if (t.name === 'mixamorigHips.position') { const v = t.values; for (let i = 0; i < v.length; i += 3) { v[i] += rest.x + add.x; v[i + 1] += rest.y + add.y; v[i + 2] += rest.z + add.z; } } return cc; };
+      Z = mx.clipAction(prep(sc.zitten, V(0, 0, 0))); O = mx.clipAction(prep(sc.opstaan, zEnd));
+      for (const a of [Z, O]) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.setEffectiveWeight(0); }
+      model.updateMatrixWorld(true); sa.reach = Math.hypot(zEnd.x, zEnd.z) * hips.parent.getWorldScale(new THREE.Vector3()).x;
+      sa.start = () => { O.stop(); Z.reset(); Z.play(); }; sa.up = () => { Z.stop(); O.reset(); O.play(); }; sa.ready = true;
+      if (sa.phase === 'down' || sa.phase === 'seated') { Z.reset(); Z.play(); if (sa.phase === 'seated') Z.time = Z.getClip().duration; }
+    });
+    pend.fire = () => { if (sa.phase) return; const w = Math.random() < .5 && A.wave ? A.wave : (A.wave2 || A.wave); if (!w) return; w.reset(); w.play(); st.special = w; st.specT = w === A.wave ? 1.7 : w.getClip().duration - .15; };
     ctl = (dt, speed) => {
       st.wk += (Math.min(1, speed / 1.2) - st.wk) * Math.min(1, dt * 8);
       if (st.special) { st.specT -= dt; if (st.specT <= 0 || (st.special === A.look && speed > .3)) st.special = null; }
       if (!st.special && speed < .1) { st.idleT += dt; if (st.idleT > 9 && A.look && Math.random() < dt * .25) { A.look.reset(); A.look.play(); st.special = A.look; st.specT = A.look.getClip().duration - .2; st.idleT = 0; } } else if (speed >= .1) st.idleT = 0;
-      if (sit.target > 0) { st.idleT = 0; if (st.special === A.look) st.special = null; }
+      if (sit.target > 0 || sa.phase) { st.idleT = 0; if (st.special === A.look) st.special = null; }
       st.sw += ((st.special ? 1 : 0) - st.sw) * Math.min(1, dt * 6);
-      const ws = sit.w * sit.w * (3 - 2 * sit.w), sa = ws > .001 ? sitAction(sit.S) : null, base = (1 - st.sw) * (1 - ws);
-      for (const [k, a] of Object.entries(A)) a.setEffectiveWeight(k === 'idle' ? (1 - st.wk) * base : k === 'walk' ? st.wk * base : (a === st.special ? st.sw * (1 - ws) : 0));
-      for (const a of sitCache.values()) a.setEffectiveWeight(a === sa ? ws : 0);
+      let zw = 0, ow = 0;
+      if (sa.phase && Z) {
+        sa.t += dt;
+        if (sa.phase === 'down') { zw = Math.min(1, sa.t / .3); if (sa.t >= Z.getClip().duration) sa.phase = 'seated'; }
+        else if (sa.phase === 'seated') zw = 1;
+        else if (sa.phase === 'up') { ow = 1; if (sa.t >= O.getClip().duration) { sa.phase = 'out'; sa.t = 0; } }
+        else { ow = 1 - Math.min(1, sa.t / .35); if (sa.t >= .35) sa.phase = null; }
+      }
+      const ws = sit.w * sit.w * (3 - 2 * sit.w), pa = ws > .001 ? sitAction(sit.S) : null, aw = zw + ow, base = (1 - st.sw) * (1 - ws) * (1 - aw);
+      for (const [k, a] of Object.entries(A)) a.setEffectiveWeight(k === 'idle' ? (1 - st.wk) * base : k === 'walk' ? st.wk * base : (a === st.special ? st.sw * (1 - ws) * (1 - aw) : 0));
+      for (const a of sitCache.values()) a.setEffectiveWeight(a === pa ? ws * (1 - aw) : 0);
+      if (Z) { Z.setEffectiveWeight(zw); O.setEffectiveWeight(ow); }
       if (A.walk) A.walk.timeScale = Math.max(.7, Math.min(2.2, speed / 1.3));
       mx.update(dt);
+      // vast punt aan de voeten: de laagste voetzool op de vloer; tijdens het zitten het bekken op de zitting
+      model.position.y = 0; model.updateMatrixWorld(true); const ry = root.matrixWorld.elements[13];
+      let sole = 1e9; for (const [b, h] of feet) sole = Math.min(sole, wp(b, V0).y - h); let off = feet.length ? ry - sole : 0;
+      const an = sa.phase === 'down' ? sstep(1.35, 2.05, sa.t) : sa.phase === 'seated' ? 1 : sa.phase === 'up' ? 1 - sstep(.15, .7, sa.t) : 0;
+      if (an > 0 && hips) off += (sa.S + clear - (wp(hips, V0).y - ry + off)) * an;
+      model.position.y = off;
     };
   });
   return root;
@@ -1700,16 +1762,18 @@ function camBlocked(x, z) {
   for (const c of colliders) if (c.on && c.on() && x > c.x1 - .06 && x < c.x2 + .06 && z > c.z1 - .06 && z < c.z2 + .06) return true;
   return false;
 }
-let camD = 2.6;
+let camD = 2.6; const _hv = new THREE.Vector3();
 // P staat in gebouweenheden; camera en personages in echte meters (× WS)
 function placeCamera(bob) {
   const wx = P.x * WS, wy = P.y * WS, wz = P.z * WS;
-  const sw = sitW(myAvatar), sS = myAvatar.userData.sit ? myAvatar.userData.sit.S : 0;
-  if (!third) { camera.position.set(wx, wy + (EYE + bob) * (1 - sw) + (sS + .8) * sw, wz); camera.rotation.set(P.pitch, P.yaw, 0); return; }
-  const cp = Math.cos(P.pitch), dx = -Math.sin(P.yaw) * cp, dy = Math.sin(P.pitch), dz = -Math.cos(P.yaw) * cp, ty = wy + 1.7 * (1 - sw) + (sS + .62) * sw;
+  const sw = seatW(myAvatar), sS = myAvatar.userData.sit ? myAvatar.userData.sit.S : 0, head = myAvatar.userData.head;
+  let hx = wx, hy = wy + sS + .8, hz = wz;
+  if (sw > 0 && head) { myAvatar.updateMatrixWorld(true); head.getWorldPosition(_hv); hx = _hv.x - Math.sin(myAvatar.rotation.y) * .08; hy = _hv.y + .08; hz = _hv.z - Math.cos(myAvatar.rotation.y) * .08; }
+  if (!third) { camera.position.set(wx + (hx - wx) * sw, (wy + EYE + bob) * (1 - sw) + hy * sw, wz + (hz - wz) * sw); camera.rotation.set(P.pitch, P.yaw, 0); return; }
+  const cp = Math.cos(P.pitch), dx = -Math.sin(P.yaw) * cp, dy = Math.sin(P.pitch), dz = -Math.cos(P.yaw) * cp, ty = (wy + 1.7) * (1 - sw) + (hy - .12) * sw;
   let want = 2.8; for (let s = .25; s <= 2.8; s += .08) if (camBlocked(P.x - dx * s / WS, P.z - dz * s / WS)) { want = Math.max(.25, s - .18); break; }
   camD = want < camD ? want : camD + (want - camD) * .12;
-  const cx = wx - dx * camD, cz = wz - dz * camD; let cy = ty - dy * camD;
+  const ox = wx + (hx - wx) * sw, oz = wz + (hz - wz) * sw, cx = ox - dx * camD, cz = oz - dz * camD; let cy = ty - dy * camD;
   const rx = cx / WS, rz = cz / WS, inside = rz > -.3 && rz < HD + .3 && rx > -3.7 && rx < 20.05, ceil = inside ? ceilAt(rz) * WS - .12 : 40;
   cy = Math.max(wy + .3, Math.min(ceil, cy));
   camera.position.set(cx, cy, cz); camera.rotation.set(P.pitch, P.yaw, 0);
@@ -1862,7 +1926,7 @@ async function pushDoors() {
 })();
 function sendPresence(dt, speed) {
   if (!NET.room) return; NET.sendT += dt; if (NET.sendT < .08) return; NET.sendT = 0;
-  const st = { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(3), sp: +speed.toFixed(1), av: myAv, uid: NET.myId, seat: SIT.seat && SIT.phase !== 3 ? SIT.seat.id : -1 };
+  const st = { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(3), sp: +speed.toFixed(1), av: myAv, uid: NET.myId, seat: SIT.seat && (SIT.phase === 2 || SIT.phase === 3) ? SIT.seat.id : -1 };
   if (NET.sb) { st.nm = AVATARS[myAv].label; NET.myName = st.nm; NET.myColor = SB_COLORS[myAv % SB_COLORS.length]; }
   const key = JSON.stringify(st); if (key === NET.last) return; NET.last = key; NET.room.presence(st).catch(() => { });
 }
@@ -1901,7 +1965,7 @@ function frame() {
     t0 += l > .1 ? dt * (run ? 11 : 8) : 0;
   }
   updateSit(dt); updateChairs(dt);
-  const v = SIT.seat ? 0 : Math.hypot(P.x - px, P.z - pz) * WS / Math.max(dt, 1e-4); mySpeed += (v - mySpeed) * Math.min(1, dt * 12);
+  const v = SIT.seat && SIT.phase >= 2 && SIT.phase <= 4 ? 0 : Math.hypot(P.x - px, P.z - pz) * WS / Math.max(dt, 1e-4); mySpeed += (v - mySpeed) * Math.min(1, dt * 12);
   P.y += (groundAt(P.x, P.z) - P.y) * Math.min(1, dt * 10);
   for (const d of doors) { const k = d.target ? 1 : 0; d.t += Math.sign(k - d.t) * Math.min(Math.abs(k - d.t), dt * 1.6); const e = d.t * d.t * (3 - 2 * d.t); d.pivot.rotation.y = d.closed + (d.open - d.closed) * e; }
   // eigen personage
@@ -1913,7 +1977,9 @@ function frame() {
   for (const r of NET.remotes.values()) {
     if (r.fake) r.fake(dt);
     if (!r.pos) continue; r.pos.x += (r.tgt.x - r.pos.x) * a; r.pos.z += (r.tgt.z - r.pos.z) * a; r.pos.y += (r.tgt.y - r.pos.y) * a;
-    const rs = r.tgt.seat >= 0 ? SEATS[r.tgt.seat] : null, ru = r.avatar.userData.sit; if (ru) { ru.target = rs ? 1 : 0; if (rs) ru.S = rs.h * WS; }
+    const rs = r.tgt.seat >= 0 ? SEATS[r.tgt.seat] : null, ud = r.avatar.userData, ru = ud.sit;
+    if ((r.tgt.seat ?? -1) !== (r.curSeat ?? -1)) { if (rs) { r.seatMode = rs.kind !== 'bank' && ud.canAnimSit && ud.canAnimSit() ? 'anim' : 'pose'; if (r.seatMode === 'anim') ud.sitStart(rs.h * WS); } else if (r.seatMode === 'anim' && ud.sitEnd) ud.sitEnd(); r.curSeat = r.tgt.seat ?? -1; }
+    if (ru) { ru.target = rs && r.seatMode === 'pose' ? 1 : 0; if (rs) ru.S = rs.h * WS; }
     let dy = (rs ? rs.yaw : r.tgt.yaw) - r.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); r.yaw += dy * a;
     r.avatar.userData.anim(dt, rs ? 0 : r.tgt.sp); r.avatar.rotation.y = r.yaw;
     r.avatar.position.set(r.pos.x * WS, r.pos.y * WS + (ru && r.avatar.userData.sitDrop ? sitW(r.avatar) * r.avatar.userData.sitDrop(ru.S) : 0), r.pos.z * WS);
@@ -1922,7 +1988,7 @@ function frame() {
   sendPresence(dt, mySpeed);
   placeCamera(third ? 0 : Math.sin(t0) * .025);
   const nd = findDoor(), ns = findSeat(), ndd = nd ? Math.hypot(nd.cx - P.x, nd.cz - P.z) : 1e9;
-  if (SIT.seat) { hintEl.style.display = SIT.phase === 2 ? 'block' : 'none'; hintEl.innerHTML = '<b>E</b>opstaan (of wandel weg)'; }
+  if (SIT.seat) { hintEl.style.display = SIT.phase === 3 ? 'block' : 'none'; hintEl.innerHTML = '<b>E</b>opstaan (of wandel weg)'; }
   else if (ns && ns.d < ndd) { hintEl.style.display = 'block'; hintEl.innerHTML = `<b>E</b>gaan zitten: ${SEAT_LABEL[ns.s.kind] || 'stoel'}`; }
   else { hintEl.style.display = nd ? 'block' : 'none'; if (nd) hintEl.innerHTML = `<b>E</b>${nd.target ? 'sluiten' : 'openen'}: ${nd.name}`; }
   const z = zoneAt(P.x, P.z), zn = z ? z[0] + '|' + z[1] : ''; if (zn !== lastZone) { lastZone = zn; zoneEl.innerHTML = z ? `${z[0]}<small>${z[1]}</small>` : 'Polygon'; }
@@ -1932,7 +1998,7 @@ function frame() {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); sizeMap(); });
 window.__view = (x, z, yaw, pitch = 0) => { Object.assign(P, { x, z, yaw, pitch }); P.y = groundAt(x, z); started = true; overlay.hidden = true; };
 window.__third = (on) => { third = on; };
-window.__interact = () => interact(); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, w: myAvatar.userData.sit ? +myAvatar.userData.sit.w.toFixed(2) : null });
+window.__interact = () => interact(); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
 window.__cam = camera;
 window.__fake = (n) => { for (let i = 0; i < n; i++) { const r = makeRemote('fake' + i, (i + 1) % AVATARS.length, null); r.name = AVATARS[(i + 1) % AVATARS.length].label; r.color = ['#3b82f6', '#e11d48', '#16a34a', '#d97706', '#7c3aed', '#0891b2'][i % 6]; setTag(r); const cx = 8 + Math.cos(i) * 2, cz = 7 + Math.sin(i) * 2.2; let t = i; r.pos = { x: cx, y: 0, z: cz }; r.fake = (dt) => { t += dt * .35; r.tgt = { x: cx + Math.cos(t) * 1.2 * (i % 2 ? 1 : 0), y: 0, z: cz + Math.sin(t) * 1.2 * (i % 2 ? 1 : 0), yaw: i % 2 ? -t : i * .9 + 2.6, sp: i % 2 ? 1.5 : 0 }; }; if (i === 2) showBubble(r, 'Goeiemorgen! Koffie iemand?'); if (i === 4) r.avatar.userData.wave(); } renderOnline(); };
 window.__info = () => { let t = 0; scene.traverse(o => { if (o.isMesh && o.geometry) { const n = (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; t += o.isInstancedMesh ? n * o.count : n; } }); return { tris: Math.round(t), draws: renderer.info.render.calls }; };
