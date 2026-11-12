@@ -14,7 +14,6 @@ Een 3D-wandeling door het Polygon-bureau, gebouwd met [three.js](https://threejs
 | Enter of T | chatten |
 | X | zwaaien |
 | M | kaart groter of kleiner |
-| P | spelmenu |
 | K | kaarten (als je aan de eettafel zit) |
 | G / F | beeldkwaliteit wisselen / beelden per seconde tonen |
 
@@ -63,8 +62,9 @@ Zonder ingevulde Supabase-gegevens start het spel als solo-wandeling.
 
 - **Arcadekast** (E bij de kast in de lounge): Polygon Defender, Kabelkluwen en Gevelbreker.
 - **Whiteboard** (E in het sas): tekenen met de muis; iedereen ziet de tekening en ze blijft bewaard.
-- **Kaarten** (K als je aan de eettafel zit, of via het menu): blackjack en patience.
-- **Spelmenu**: E bij de tv op het middenblok, of P waar je ook bent. Daar staan ook de ranglijsten.
+- **Kaarten** (ga aan de eettafel zitten en druk op K): blackjack en patience.
+
+Elk spel toont zijn eigen ranglijst.
 
 ### Ranglijsten en whiteboard bewaren op GitHub Pages
 

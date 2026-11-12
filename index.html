@@ -61,7 +61,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:#bcd9e6;font-family:va
     <kbd>Shift</kbd><span>sneller lopen</span>
     <kbd>E</kbd><span>deur openen of sluiten, gaan zitten of opstaan, spelen</span>
     <kbd>M</kbd><span>kaart groter of kleiner</span>
-    <kbd>P</kbd><span>spelmenu</span>
+    <kbd>K</kbd><span>kaarten, als je aan de eettafel zit</span>
     <kbd>Esc</kbd><span>pauze</span>
   </div>
   <button id="start" type="button" disabled>Laden…</button>
@@ -1418,8 +1418,7 @@ function groundAt(x, z) {
 }
 const keys = new Set(); let locked = false, dragLook = false, started = false, mapBig = false;
 addEventListener('keydown', e => { if (GM.active) { if (e.code === 'Escape') closeGame(); else if (GM.active.key) GM.active.key(e, true); if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].includes(e.code) && !(e.target && e.target.tagName === 'INPUT')) e.preventDefault(); return; }
-  if (e.code === 'KeyP' && started && overlay.hidden && chatBox.hidden) { openGame(MENU); return; }
-  if (e.code === 'KeyK' && SIT.seat && SIT.seat.cards && SIT.phase === 3) { openGame(CARDS.bj); return; }
+  if (e.code === 'KeyK' && SIT.seat && SIT.seat.cards && SIT.phase === 3) { openGame(MENU); return; }
   keys.add(e.code); if (e.code === 'KeyE' && !e.repeat) interact(); if (e.code === 'KeyM') { mapBig = !mapBig; sizeMap(); } });
 addEventListener('keyup', e => { if (GM.active) { if (GM.active.key) GM.active.key(e, false); return; } keys.delete(e.code); });
 addEventListener('blur', () => keys.clear());
@@ -2376,26 +2375,17 @@ const CARDS = (() => {
   return { bj, sol };
 })();
 
-// ═════════════════════════ SPELMENU (tv op het middenblok, of P waar je ook bent)
+// ═════════════════════════ KAARTTAFEL: kies een kaartspel als je aan de eettafel zit (K)
 const MENU = {
   open(p) {
-    const item = (t, d, f, soon) => `<button class="tile${soon ? ' soon' : ''}" data-k="${f}"><b>${t}</b><span class="muted">${d}</span></button>`;
-    p.insertAdjacentHTML('beforeend', `<h2>Polyverse spellen</h2><div class="muted">Kies een spel. Je kan ook ter plaatse spelen: E bij de arcadekast of het whiteboard, K als je aan de eettafel zit.</div>
-      <div class="tiles">${item('Arcadekast', 'Polygon Defender, Kabelkluwen en Gevelbreker', 'arc')}${item('Blackjack', 'Tegen de bank, met fiches', 'bj')}${item('Patience', 'Klondike, één kaart per keer', 'sol')}${item('Whiteboard', 'Tekenen in het sas, iedereen ziet mee', 'wb')}${item('Zombie-aanval', 'Binnenkort', '', 1)}${item('Muismodus', 'Binnenkort', '', 1)}</div>
-      <h2 style="margin-top:16px;font-size:16px">Ranglijsten</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px" id="lbs"></div>`);
-    p.querySelectorAll('.tile[data-k]').forEach(b => b.onclick = () => { const k = b.dataset.k; if (k === 'arc') openGame(ARC); else if (k === 'bj') openGame(CARDS.bj); else if (k === 'sol') openGame(CARDS.sol); else if (k === 'wb') openGame(WB); });
-    const lbs = p.querySelector('#lbs'); for (const [g, t] of [['arc_defender', 'Polygon Defender'], ['arc_kabel', 'Kabelkluwen'], ['arc_gevel', 'Gevelbreker'], ['blackjack', 'Blackjack (fiches)'], ['patience', 'Patience']]) { const d = document.createElement('div'); lbs.appendChild(d); SCORES.render(d, g, t); }
+    p.insertAdjacentHTML('beforeend', `<h2>Kaarten aan de eettafel</h2><div class="tiles" style="grid-template-columns:repeat(2,minmax(220px,1fr))"><button class="tile" data-k="bj"><b>Blackjack</b><span class="muted">Tegen de bank, met fiches</span></button><button class="tile" data-k="sol"><b>Patience</b><span class="muted">Klondike, één kaart per keer</span></button></div>`);
+    p.querySelectorAll('.tile').forEach(b => b.onclick = () => openGame(b.dataset.k === 'bj' ? CARDS.bj : CARDS.sol));
   },
-  key() { }
+  key(e, down) { if (down && e.code === 'KeyB') openGame(CARDS.bj); if (down && e.code === 'KeyP') openGame(CARDS.sol); }
 };
 SPOTS.push({ x: 6.22, z: 5.2, tx: 6.22, tz: 5.85, r: 1.2, label: 'spelen op de arcadekast', act: () => openGame(ARC) });
-SPOTS.push({ x: 7.5, z: 6.7, tx: 6.85, tz: 6.7, r: 1.6, label: 'spelmenu op de tv', act: () => openGame(MENU) });
 for (const s of SEATS) if (s.chair && s.cx > 5 && s.cx < 10 && s.cz > .9 && s.cz < 3.2) s.cards = true;   // stoelen aan de eettafel
-// tv toont het spelmenu
-{ const t = ctex(512, 288, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#141a2e'); gr.addColorStop(1, '#2a1f3d'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#ffd34d'; g.font = 'bold 44px Archivo, sans-serif'; g.textAlign = 'center'; g.fillText('POLYVERSE', w / 2, 96); g.fillStyle = '#f4f1ea'; g.font = '600 24px Archivo, sans-serif'; g.fillText('spellen', w / 2, 132);
-    g.font = '18px Archivo, sans-serif'; g.fillStyle = '#b9c3e0'; ['Arcade · Blackjack · Patience · Whiteboard', 'Druk op E voor het menu'].forEach((s, i) => g.fillText(s, w / 2, 190 + i * 32)); }, 1);
-  const tv = new THREE.Mesh(new THREE.PlaneGeometry(1.34, .74), new THREE.MeshBasicMaterial({ map: t })); tv.position.set(6.8545, 1.51, 6.7); tv.rotation.y = Math.PI / 2; WORLD.add(tv); }
+
 
 frame();
 </script>
