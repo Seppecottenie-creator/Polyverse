@@ -2133,11 +2133,17 @@ window.__openAll = () => doors.forEach(d => { d.target = 1; d.t = 1; });
 if (IS_PHONE) { startBtn.textContent = 'Alleen op pc'; document.getElementById('loading').textContent = 'Polyverse werkt voorlopig alleen op een computer met toetsenbord en muis. Open de link op je pc.'; }
 else { startBtn.disabled = false; startBtn.textContent = 'Start'; document.getElementById('loading').textContent = 'Klik op start en daarna in het beeld om rond te kijken.'; }
 // ═════════════════════════ SPELLETJES — basis: spelpaneel, geluid, scores en ranglijsten, plekken in het kantoor
-// Spellen zijn voorlopig enkel zichtbaar voor Seppe: op claude.ai voor de eigenaar van de pagina, op GitHub op een toestel
-// waar je één keer de link met ?spellen=aan opent (uitzetten met ?spellen=uit).
-const DEV = { on: false };
-try { const q = new URLSearchParams(location.search).get('spellen'); if (q === 'aan') localStorage.setItem('pv-spellen', '1'); if (q === 'uit') localStorage.removeItem('pv-spellen'); DEV.on = localStorage.getItem('pv-spellen') === '1'; } catch (e) { }
-{ const chk = setInterval(() => { if (NET.user && NET.user.isOwner) { clearInterval(chk); Promise.resolve(NET.user.isOwner()).then(o => { if (o) { DEV.on = true; showGameHelp(); } }).catch(() => { }); } }, 1000); setTimeout(() => clearInterval(chk), 30000); }
+// Extra's: verborgen tot je onderweg (niet in de chat) de juiste letters na elkaar typt. Enkel een vingerafdruk (SHA-256) staat hier, niet de code.
+const DEV = { on: false }, _DH = 'de3473ebcf0aed61de8c898218e128cf665b9964ee87779a8218bafec89242f9', _DL = 12;
+try { localStorage.removeItem('pv-spellen'); DEV.on = localStorage.getItem('pv-k') === _DH; } catch (e) { }
+{ let buf = '';
+  addEventListener('keydown', async e => {
+    if (!e.key || e.key.length !== 1 || (e.target && e.target.tagName === 'INPUT')) return; buf = (buf + e.key.toLowerCase()).slice(-_DL); if (buf.length < _DL || !crypto.subtle) return;
+    const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(buf)))).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (h !== _DH) return; buf = ''; DEV.on = !DEV.on; try { DEV.on ? localStorage.setItem('pv-k', _DH) : localStorage.removeItem('pv-k'); } catch (er) { } showGameHelp();
+    if (typeof sfx === 'function') { sfx(DEV.on ? 660 : 330, .12, 'triangle', .05, DEV.on ? 400 : -150); }
+  });
+}
 function showGameHelp() { document.querySelectorAll('[data-spel]').forEach(e => e.style.display = DEV.on ? '' : 'none'); }
 const GM = { active: null };
 showGameHelp();

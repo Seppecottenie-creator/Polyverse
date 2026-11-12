@@ -60,7 +60,6 @@ Zonder ingevulde Supabase-gegevens start het spel als solo-wandeling.
 
 ## Spellen
 
-De spellen zijn voorlopig verborgen. Op claude.ai ziet alleen de eigenaar van de pagina ze. Op GitHub Pages zet je ze op je eigen toestel aan door één keer de link met `?spellen=aan` te openen (bijvoorbeeld `https://seppecottenie-creator.github.io/Polyverse/?spellen=aan`); met `?spellen=uit` verberg je ze weer.
 
 - **Arcadekast** (E bij de kast in de lounge): Polygon Defender, Kabelkluwen en Gevelbreker.
 - **Whiteboard** (E in het sas): tekenen met de muis; iedereen ziet de tekening en ze blijft bewaard.
