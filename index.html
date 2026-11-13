@@ -2584,11 +2584,11 @@ for (const s of SEATS) if (s.chair && s.cx > 5 && s.cx < 10 && s.cz > .9 && s.cz
   const lab = document.getElementById('avlabel'); if (lab) lab.textContent = 'Kies je personage';
 }
 // ── echte wapens (armen + wapen met animaties) en Mixamo-zombieanimaties; geladen bij de eerste aanval
-async function fetchGltfMulti(url) {   // glTF met ingebedde buffer en meerdere texturen, zonder data:/blob:-fetch (CSP)
+async function fetchGltfMulti(url, flip = true) {   // glTF met ingebedde buffer en meerdere texturen, zonder data:/blob:-fetch (CSP)
   const res = await fetch(new URL(url, location.href).href); if (!res.ok) throw new Error('HTTP ' + res.status); const j = await res.json();
   const dec = u => { const raw = atob(u.slice(u.indexOf(',') + 1)), a = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) a[i] = raw.charCodeAt(i); return a; };
   const bin = dec(j.buffers[0].uri); delete j.buffers[0].uri;
-  const bitmaps = await Promise.all((j.images || []).map(im => createImageBitmap(new Blob([dec(im.uri)], { type: im.mimeType || 'image/jpeg' }), { imageOrientation: 'flipY' }).catch(() => null)));
+  const bitmaps = await Promise.all((j.images || []).map(im => createImageBitmap(new Blob([dec(im.uri)], { type: im.mimeType || 'image/jpeg' }), { imageOrientation: flip ? 'flipY' : 'none' }).catch(() => null)));
   const matTex = (j.materials || []).map(m => { const t = m.pbrMetallicRoughness && m.pbrMetallicRoughness.baseColorTexture; return t ? j.textures[t.index].source : null; });
   for (const m of j.materials || []) if (m.pbrMetallicRoughness) delete m.pbrMetallicRoughness.baseColorTexture;
   delete j.textures; delete j.images; delete j.samplers;
@@ -2629,9 +2629,40 @@ const WPN = (() => {
   W.render = () => { if (!W.cur) return; W.place(); sc.environment = scene.environment; const ac = renderer.autoClear; renderer.autoClear = false; renderer.clearDepth(); renderer.render(sc, camera); renderer.autoClear = ac; };
   return W;
 })();
-let ZCLIPS = null;
-let ZMODELS = null; const zombieModels = () => ZMODELS || (ZMODELS = fetchGltfMulti('models/zombies.gltf.json').then(g => { const list = g.scene.children.slice(); list.forEach(o => o.traverse(b => { if (b.isBone && !b.name.startsWith('mixamorig')) b.name = 'mixamorig' + b.name; })); return list; }).catch(e => { console.warn('zombies niet geladen', e); return null; }));
-const zombieClips = () => ZCLIPS || (ZCLIPS = fetch(new URL('models/zombie.anim.json', location.href).href).then(r => r.ok ? r.json() : null).then(j => j && Object.fromEntries(Object.entries(j).map(([k, v]) => [k, THREE.AnimationClip.parse(v)]))).catch(() => null));
+
+// zombiefiguren: Mixamo-skelet met eigen botoriëntaties; animaties worden per figuur omgerekend via beide T-houdingen
+let ZMODELS = null, ZCLIPS = null, ZREST = null;
+const zombieModels = () => ZMODELS || (ZMODELS = fetchGltfMulti('models/zombies.gltf.json', false).then(g => {
+  const list = g.scene.children.slice(), m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+  for (const o of list) {
+    o.traverse(b => { if (b.isBone) { b.name = b.name.replace(/_\d+$/, ''); if (!b.name.startsWith('mixamorig')) b.name = 'mixamorig' + b.name; } });
+    let sm = null; o.traverse(x => { if (x.isSkinnedMesh && !sm) sm = x; }); if (!sm) continue;
+    const W = {}, WP = {}; sm.skeleton.bones.forEach((b, k) => { m.copy(sm.skeleton.boneInverses[k]).invert(); m.decompose(p, q, sc); W[b.name] = q.clone(); WP[b.name] = p.clone(); });
+    o.userData.bindW = W; o.userData.hipsY = WP.mixamorigHips ? WP.mixamorigHips.y : 1;
+    // botten in de T-houding zetten (ook vingers zonder animatie)
+    o.traverse(b => { if (b.isBone && W[b.name]) { const pw = b.parent && b.parent.isBone && W[b.parent.name] ? W[b.parent.name] : new THREE.Quaternion(); b.quaternion.copy(pw).invert().multiply(W[b.name]); } });
+  }
+  return list;
+}).catch(e => { console.warn('zombies niet geladen', e); return null; }));
+const zombieClips = () => ZCLIPS || (ZCLIPS = fetch(new URL('models/zombie.anim.json', location.href).href).then(r => r.ok ? r.json() : null).then(j => { if (!j) return null; ZREST = { q: j._rest || {}, hipsY: j._hipsY || 1 }; return Object.fromEntries(Object.entries(j).filter(([k]) => k[0] !== '_').map(([k, v]) => [k, THREE.AnimationClip.parse(v)])); }).catch(() => null));
+const ZRT = new WeakMap();
+function retargetZombie(base, clips) {   // per figuur één keer: q' = D(ouder)⁻¹ · q · D(bot), met D = rustFBX⁻¹ · rustFiguur (wereld)
+  if (ZRT.has(base)) return ZRT.get(base);
+  const W = base.userData.bindW, R = ZREST.q, D = {}, I = new THREE.Quaternion(), q = new THREE.Quaternion();
+  for (const n in W) if (R[n]) D[n] = new THREE.Quaternion().fromArray(R[n]).invert().multiply(W[n]);
+  const parentOf = {}; base.traverse(b => { if (b.isBone) parentOf[b.name] = b.parent && b.parent.isBone ? b.parent.name : null; });
+  const hipsScale = base.userData.hipsY / ZREST.hipsY, out = {};
+  for (const [k, c] of Object.entries(clips)) {
+    const cc = c.clone();
+    for (const t of cc.tracks) {
+      const [bn, prop] = t.name.split('.'); t.values = t.values.slice(); const v = t.values;
+      if (prop === 'quaternion' && D[bn]) { const dp = parentOf[bn] && D[parentOf[bn]] ? D[parentOf[bn]].clone().invert() : I; for (let n = 0; n < v.length; n += 4) { q.fromArray(v, n); q.premultiply(dp).multiply(D[bn]); q.toArray(v, n); } }
+      else if (prop === 'position') for (let n = 0; n < v.length; n++) v[n] *= hipsScale;
+    }
+    out[k] = cc;
+  }
+  ZRT.set(base, out); return out;
+}
 // ═════════════════════════ ZOMBIE-AANVAL: E bij de garagepoort in de koer. Golven zombies komen langs de deuren binnen.
 //   Tijdelijke zombies = bleke versies van de personages; echte zombiemodellen en -animaties kunnen later in de plaats komen.
 // ── nacht voor de zombie-aanval: maan, mist, zaklamp, flikkerende lampen, spleten in de muren en enge geluiden
@@ -2796,8 +2827,8 @@ const ZB = (() => {
       model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
       const hips = model.getObjectByName('mixamorigHips'), rest = hips ? hips.position.clone() : new THREE.Vector3();
       const mx = new THREE.AnimationMixer(model), A = {};
-      const sp = model.getObjectByName('mixamorigSpine'), flip = z.real && sp && sp.position.y < 0, RX = new THREE.Quaternion(1, 0, 0, 0), _q = new THREE.Quaternion();
-      for (const [k, c] of Object.entries(clips)) { const cc = c.clone(); if (flip) for (const t of cc.tracks) { const bn = t.name.split('.')[0], hipQ = t.name === 'mixamorigHips.quaternion', kid = /^mixamorig(Spine|LeftUpLeg|RightUpLeg)\.quaternion$/.test(t.name); if (!hipQ && !kid) continue; t.values = t.values.slice(); const v = t.values; for (let n = 0; n < v.length; n += 4) { _q.fromArray(v, n); if (hipQ) _q.multiply(RX); else _q.premultiply(RX); _q.toArray(v, n); } }
+      const src = z.real ? retargetZombie(g.scene, clips) : clips;
+      for (const [k, c] of Object.entries(src)) { const cc = c.clone();
         for (const t of cc.tracks) if (t.name === 'mixamorigHips.position') { const v = t.values; for (let n = 0; n < v.length; n += 3) { v[n] += rest.x; v[n + 1] += rest.y; v[n + 2] += rest.z; } } A[k] = mx.clipAction(cc); }
       for (const k of ['attack', 'attack2', 'hit', 'death', 'dying']) if (A[k]) { A[k].setLoop(THREE.LoopOnce, 1); A[k].clampWhenFinished = true; }
       root.add(model); z.model = model; z.mx = mx; z.A = A; zplay(z, z.dead ? 'death' : 'idle', 0);
