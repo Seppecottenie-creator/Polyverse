@@ -1995,7 +1995,7 @@ async function supabaseRoom() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   let createClient; try { ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm')); } catch (e) { console.warn('supabase niet geladen', e); return null; }
   const me = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 20 } } }); NET.sbClient = client;
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 40 } } }); NET.sbClient = client;
   const ch = client.channel('polygon-bureau', { config: { presence: { key: me }, broadcast: { self: false } } });
   const ids = new Map(), pos = new Map(), peerFns = [], connFns = [], topicFns = new Map(); let ident = {}, connected = false, frozen = Object.freeze([]);
   const build = () => {
@@ -2204,7 +2204,7 @@ function frame() {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); sizeMap(); });
 window.__view = (x, z, yaw, pitch = 0) => { Object.assign(P, { x, z, yaw, pitch }); P.y = groundAt(x, z); started = true; overlay.hidden = true; };
 window.__third = (on) => { third = on; };
-window.__interact = () => interact(); window.__zb = () => ZB; window.__pp = () => ({ x: P.x, z: P.z }); window.__night = () => NIGHT; window.__dbgN = () => { const L = []; scene.traverse(o => { if (o.isLight && o.intensity > 0 && o.visible) L.push(o.type + ':' + o.intensity.toFixed(2)); }); const mt = {}; scene.traverse(o => { if (o.isMesh && o.visible) { const m = [].concat(o.material)[0]; const k = m.type + (m.emissive && m.emissive.getHex() ? ' em' : '') + (m.envMap ? ' env' : '') + (m.lightMap ? ' lm' : ''); mt[k] = (mt[k] || 0) + 1; } }); const hs = []; scene.traverse(o => { if (o.isHemisphereLight) hs.push([o.parent && o.parent.type, o.intensity, o.color.getHexString(), scene.children.indexOf(o)]); }); return { hs, L, env: !!scene.environment, fog: scene.fog && scene.fog.type, mt }; }; window.__wpn = () => ({ ready: WPN.ready, cur: !!WPN.cur }); window.__camdbg = () => ({ parent: camera.parent && camera.parent.type, kids: camera.children.length, vis: camera.children.map(c => c.visible), near: camera.near }); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
+window.__interact = () => interact(); window.__zb = () => ZB; window.__net = () => ({ keys: [...NET.remotes.keys()], pos: [...NET.remotes.values()].map(r => r.pos && [r.pos.x, r.pos.z]) }); window.__pp = () => ({ x: P.x, z: P.z }); window.__night = () => NIGHT; window.__dbgN = () => { const L = []; scene.traverse(o => { if (o.isLight && o.intensity > 0 && o.visible) L.push(o.type + ':' + o.intensity.toFixed(2)); }); const mt = {}; scene.traverse(o => { if (o.isMesh && o.visible) { const m = [].concat(o.material)[0]; const k = m.type + (m.emissive && m.emissive.getHex() ? ' em' : '') + (m.envMap ? ' env' : '') + (m.lightMap ? ' lm' : ''); mt[k] = (mt[k] || 0) + 1; } }); const hs = []; scene.traverse(o => { if (o.isHemisphereLight) hs.push([o.parent && o.parent.type, o.intensity, o.color.getHexString(), scene.children.indexOf(o)]); }); return { hs, L, env: !!scene.environment, fog: scene.fog && scene.fog.type, mt }; }; window.__wpn = () => ({ ready: WPN.ready, cur: !!WPN.cur }); window.__camdbg = () => ({ parent: camera.parent && camera.parent.type, kids: camera.children.length, vis: camera.children.map(c => c.visible), near: camera.near }); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
 window.__cam = camera;
 window.__fake = (n) => { for (let i = 0; i < n; i++) { const r = makeRemote('fake' + i, (i + 1) % AVATARS.length, null); r.name = AVATARS[(i + 1) % AVATARS.length].label; r.color = ['#3b82f6', '#e11d48', '#16a34a', '#d97706', '#7c3aed', '#0891b2'][i % 6]; setTag(r); const cx = 8 + Math.cos(i) * 2, cz = 7 + Math.sin(i) * 2.2; let t = i; r.pos = { x: cx, y: 0, z: cz }; r.fake = (dt) => { t += dt * .35; r.tgt = { x: cx + Math.cos(t) * 1.2 * (i % 2 ? 1 : 0), y: 0, z: cz + Math.sin(t) * 1.2 * (i % 2 ? 1 : 0), yaw: i % 2 ? -t : i * .9 + 2.6, sp: i % 2 ? 1.5 : 0 }; }; if (i === 2) showBubble(r, 'Goeiemorgen! Koffie iemand?'); if (i === 4) r.avatar.userData.wave(); } renderOnline(); };
 window.__info = () => { let t = 0; scene.traverse(o => { if (o.isMesh && o.geometry) { const n = (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; t += o.isInstancedMesh ? n * o.count : n; } }); return { tris: Math.round(t), draws: renderer.info.render.calls }; };
@@ -2994,6 +2994,89 @@ const NIGHT = (() => {
 const ZB = (() => {
   const Z = { active: false, list: [], wave: 0, toSpawn: 0, spawnT: 0, score: 0, kills: 0, hp: 100, ammo: 12, mag: 12, reloadT: 0, fireT: 0, firing: false, gun: 'pistool', hurtT: 0, between: 0, gridT: 0, hud: null, prevThird: true };
   const SPAWNS = [{ x: 7.85, z: 15.6, zone: 'straat' }, { x: 25.6, z: -3.5, zone: 'koer' }, { x: 14.3, z: -5.5, zone: 'koer' }, ...NIGHT.HOLES.map(h => ({ x: h.sx, z: h.sz, hole: h, zone: h.zone })), ...NIGHT.PILES.map(h => ({ x: h.sx, z: h.sz, hole: h, zone: 'straat' }))];   // voordeur, garagepoort, ondergrondse garage, gaten
+  // ── SAMEN SPELEN: wie start is spelleider (zombies, golven, verhaal) en stuurt de toestand rond; anderen doen mee via de garagepoort
+  const MP = { role: 'solo', sid: null, zid: Math.random().toString(36).slice(2, 9), players: new Map(), rx: {}, open: null, nid: 1, stT: 0, openT: 0, hooked: false, last: null, team: [], lastBt: null };
+  const AN = ['idle', 'idle2', 'walk', 'run', 'attack', 'attack2', 'hit', 'death', 'dying'];
+  const myN = () => NET.myName || (AVATARS[myAv] && AVATARS[myAv].label) || 'Speler';
+  const online = () => !!(NET.room && NET.connected);
+  const send = (t, d = {}) => { if (!online()) return; try { const p = NET.room.emit('zb', Object.assign({ t, sid: MP.sid, f: MP.zid }, d)); if (p && p.catch) p.catch(() => { }); } catch (e) { } };
+  function hookNet() { if (MP.hooked || !NET.room) return; MP.hooked = true; try { NET.room.on('zb', onMsg, () => { }); } catch (e) { MP.hooked = false; } }
+  setInterval(hookNet, 1000);
+  function award(head, big) { const base = Z.mode === 'story' ? 20 : 10, c = (base + (head ? Math.round(base * .5) : 0)) * (big ? 3 : 1); Z.coins += c; pop(c); Z.kills++; Z.score += Math.round(c * (1 + Z.wave * .25)); sfx(140, .4, 'sawtooth', .05, -80); setHud(); }
+  function onMsg(m) {
+    const d = m && m.data; if (!d || d.f === MP.zid || typeof d.t !== 'string') return; MP.rx[d.t] = (MP.rx[d.t] || 0) + 1;
+    if (d.t === 'open') {
+      if (Z.active && MP.role !== 'solo') return; const fresh = !MP.open || MP.open.sid !== d.sid || performance.now() - MP.open.t > 30000; MP.open = { sid: d.sid, mode: d.mode, name: String(d.n || '?').slice(0, 24), t: performance.now() };
+      if (Z.active && Z.menu && fresh && Z.menu.render) Z.menu.render();
+      if (fresh && !Z.active) chatLine('Zombie', MP.open.name + TL(' speelt de zombie-aanval. Ga naar de garagepoort in de koer en druk E om mee te doen.', ' is playing zombie attack. Go to the garage gate in the courtyard and press E to join.')); return;
+    }
+    if (!Z.active || d.sid !== MP.sid) return;
+    if (MP.role === 'host') {
+      if (MP.players.has(d.f)) MP.players.get(d.f).peer = m.peer;
+      if (d.t === 'join') { MP.players.set(d.f, { peer: m.peer, name: String(d.n || '?').slice(0, 24), down: false }); chatLine('Zombie', String(d.n || '?') + TL(' doet mee', ' joined')); MP.stT = 0; }
+      else if (d.t === 'leave') MP.players.delete(d.f);
+      else if (d.t === 'down' || d.t === 'up') { const p = MP.players.get(d.f); if (p) p.down = d.t === 'down'; }
+      else if (d.t === 'hit') { const z = Z.list.find(q => q.id === d.id && !q.dead); if (!z) return; z.hp -= Math.min(2, d.d || 1); z.flash = .12; z.kb = .12; z.hitT = .45; if (z.hp <= 0) { z.dead = 1e-3; send('kill', { by: d.f, h: d.h ? 1 : 0, b: z.big ? 1 : 0 }); } }
+      else if (d.t === 'stun') { for (const z of Z.list) if (!z.dead && Math.hypot(z.x - d.x, z.z - d.z) < 4.5 && !hitWall(d.x, d.z, z.x, z.z)) { z.stun = 4; z.atkT = 0; } }
+      else if (d.t === 'act' && Z.mode === 'story') storyAct(d);
+    } else if (MP.role === 'client') {
+      if (d.t === 'st') MP.last = d;
+      else if (d.t === 'kill' && d.by === MP.zid) award(d.h, d.b);
+      else if (d.t === 'dmg' && d.to === MP.zid && !Z.down) { Z.hp -= d.n; Z.hurtT = .35; noise(.15, .1); sfx(90, .2, 'sawtooth', .06); setHud(); }
+      else if (d.t === 'win') win();
+      else if (d.t === 'over') stop(true);
+      else if (d.t === 'end') { chatLine('Zombie', TL('De spelleider stopte de zombie-aanval.', 'The host ended the zombie attack.')); stop(false); }
+    }
+  }
+  function storyAct(d) {
+    if (d.a === 'u') { const l = LOCKS[d.i]; if (l && !Z.unl.has(d.i)) unlock(l, true); }
+    else if (d.a === 'p') { if (PARTS[d.i] && !Z.parts.has(d.i)) { Z.parts.add(d.i); scene.remove(Z.partMeshes[d.i]); objective(); } }
+    else if (d.a === 'b') { if (Z.parts.size === PARTS.length && !Z.planted) { Z.carry = true; objective(); } }
+    else if (d.a === 'pl') { if (!Z.planted) plantBomb(); }
+  }
+  function targets() { const a = []; if (!Z.down) a.push({ x: P.x, z: P.z, me: true }); if (MP.role === 'host') for (const [zid, p] of MP.players) { if (p.down) continue; const rr = NET.remotes.get(p.peer), q = rr && (rr.tgt || rr.pos); if (q) a.push({ x: q.x, z: q.z, zid });   /* laatst ontvangen positie */ } return a; }
+  function nearest(z) { let b = null, bd = 1e9; for (const t of Z.T || []) { const dd = Math.hypot(t.x - z.x, t.z - z.z); if (dd < bd) { bd = dd; b = t; } } return b || { x: P.x, z: P.z, me: true, none: true }; }
+  function dmgTo(T, n) { if (T.none) return; if (T.me) { Z.hp -= n; Z.hurtT = .35; noise(.15, .1); sfx(90, .2, 'sawtooth', .06); setHud(); } else send('dmg', { to: T.zid, n }); }
+  function revive() { if (!Z.down) return; Z.down = false; Z.hp = 50; send('up'); say(TL('Je staat weer op', 'Back on your feet'), '', 2); setHud(); }
+  function placeBombMesh() { bombMesh.position.set((PLANT.x + .9) * WS, groundAt(PLANT.x + .9, PLANT.z) * WS, PLANT.z * WS); scene.add(bombMesh); }
+  function plantBomb() { Z.carry = false; Z.planted = true; Z.bombT = BOMB_T; placeBombMesh(); say(TL('Bom geplaatst', 'Bomb planted'), TL('hou het nog 90 seconden vol', 'hold out for 90 more seconds'), 3); objective(); }
+  function applyStory(s) {
+    for (const i of s.u || []) if (!Z.unl.has(i)) { Z.unl.add(i); const l = LOCKS[i]; if (l) { for (const d of doors) if (l.names.includes(d.name)) { d.locked = false; d.target = 1; } Z.zones.add(l.zone); } }
+    for (const i of s.pa || []) if (!Z.parts.has(i)) { Z.parts.add(i); if (Z.partMeshes && Z.partMeshes[i]) scene.remove(Z.partMeshes[i]); }
+    Z.carry = !!s.c; if (s.pl && !Z.planted) { placeBombMesh(); say(TL('Bom geplaatst', 'Bomb planted'), TL('hou het nog 90 seconden vol', 'hold out for 90 more seconds'), 3); } Z.planted = !!s.pl;
+    if (Z.planted) { Z.bombT = s.bt; const b = Math.ceil(s.bt); if (b !== MP.lastBt) { MP.lastBt = b; bombMesh.userData.draw(fmt(Math.max(0, s.bt))); sfx(1200, .05, 'square', .03); } }
+    objective();
+  }
+  // deelnemer: zombies volgen de toestand van de spelleider (vloeiend tussen de berichten)
+  function clientZombies(dt) {
+    const st = MP.last; if (st) {
+      MP.last = null; if (typeof st.w === 'number' && st.w !== Z.wave) { if (st.w > Z.wave) { if (Z.down) revive(); if (st.w > 1) say(TL('Golf ', 'Round ') + st.w, ''); } Z.wave = st.w; }
+      MP.team = st.tm || []; Z.netLeft = st.tl || 0; const seen = new Set();
+      for (const e of st.l || []) { seen.add(e[0]); let z = Z.list.find(q => q.id === e[0]);
+        if (!z) { z = { id: e[0], x: e[1], z: e[2], yaw: e[3], mi: e[6], big: !!e[7], hp: 99, sp: 1, atk: 0, atkT: 0, hitT: 0, dead: e[5] ? 1e-3 : 0, flash: 0, tinted: false, net: true }; z.av = zombieBody(z); if (z.big) z.av.scale.setScalar(1.25); scene.add(z.av); Z.list.push(z); }
+        z.nx = e[1]; z.nz = e[2]; z.nyaw = e[3]; z.an = AN[e[4]] || 'idle'; z.nts = (e[8] || 10) / 10; z.cr = e[9]; z.miss = 0; if (e[5] && !z.dead) z.dead = 1e-3; }
+      for (const z of Z.list) if (!seen.has(z.id)) z.miss = (z.miss || 0) + 1;
+      if (st.s && Z.mode === 'story') applyStory(st.s); setHud();
+    }
+    for (const z of Z.list) {
+      const av = z.av; tint(z);
+      if (z.nx !== undefined) { const k = Math.min(1, dt * 10); z.x += (z.nx - z.x) * k; z.z += (z.nz - z.z) * k; z.yaw += Math.atan2(Math.sin(z.nyaw - z.yaw), Math.cos(z.nyaw - z.yaw)) * k; }
+      if (z.dead) z.dead += dt;
+      av.position.set(z.x * WS, groundAt(z.x, z.z) * WS - (z.dead ? Math.max(0, z.dead - 3.4) * .5 : 0), z.z * WS); av.rotation.y = z.yaw; av.rotation.x = z.cr && !z.dead ? .45 : 0;
+      if (z.mx) { if (z.dead) zplay(z, z.deathK || (z.deathK = z.id % 2 ? 'death' : 'dying'), .15); else zplay(z, z.an || 'idle', .2, z.nts || 1); z.mx.update(dt); }
+      if (z.mat) { const f = z.flash > 0 ? 1 : 0; for (const mm of z.mat) mm.emissive.setRGB(f * .6, 0, 0); } z.flash -= dt;
+    }
+    Z.list = Z.list.filter(z => { if (z.dead > 4.6 || (!z.dead && z.miss > 12)) { z.gone = true; scene.remove(z.av); return false; } return true; });
+  }
+  // spelleider: elke 0,16 s de toestand naar iedereen, om de 2 s een uitnodiging
+  function hostTick(dt) {
+    MP.openT -= dt; if (MP.openT <= 0) { MP.openT = 2; send('open', { mode: Z.mode, n: myN() }); }
+    MP.stT -= dt; if (MP.stT > 0) return; MP.stT = .16;
+    const l = Z.list.filter(z => !z.dead || z.dead < 1.5).map(z => [z.id, +z.x.toFixed(2), +z.z.toFixed(2), +z.yaw.toFixed(2), Math.max(0, AN.indexOf(z.cur)), z.dead ? 1 : 0, z.mi || 0, z.big ? 1 : 0, Math.round((z.ts || 1) * 10), z.crawl > 0 ? 1 : 0]);
+    MP.team = [[myN(), Z.down ? 1 : 0], ...[...MP.players.values()].map(p => [p.name, p.down ? 1 : 0])];
+    send('st', { w: Z.wave, l, tm: MP.team, tl: Z.list.filter(z => !z.dead).length + Z.toSpawn, s: Z.mode === 'story' ? { u: [...Z.unl], pa: [...Z.parts], c: Z.carry ? 1 : 0, pl: Z.planted ? 1 : 0, bt: +(Z.bombT || 0).toFixed(1) } : null });
+  }
+  function teamHud() { const el = $('zteam'); if (!el) return; if (MP.role === 'solo' || MP.team.length < 2) { el.style.display = 'none'; return; } el.style.display = 'block'; el.innerHTML = `<small>${TL('Team', 'Team')}</small>` + MP.team.map(([n, dn]) => `<div class="${dn ? 'dn' : ''}">${dn ? '✗' : '●'} ${String(n).replace(/[<>&]/g, '')}</div>`).join(''); }
   // ── looprooster: vrije cellen van 25 cm; afstandsveld vanaf de speler (breadth-first), zombies volgen de daling
   const G = { x0: -4, z0: -7.2, s: .25, w: 124, h: 114 }; G.block = new Uint8Array(G.w * G.h); G.dist = new Float32Array(G.w * G.h);
   function buildGrid() {
@@ -3004,21 +3087,22 @@ const ZB = (() => {
   }
   const cell = (x, z) => [Math.floor((x - G.x0) / G.s), Math.floor((z - G.z0) / G.s)];
   function flow() {   // kortste afstand tot de speler voor elke vrije cel (label-correcting met ringbuffer: geen cel valt weg)
-    const N = G.w * G.h; G.dist.fill(1e9); const [pi, pj] = cell(P.x, P.z); if (pi < 0 || pj < 0 || pi >= G.w || pj >= G.h) return;
+    const N = G.w * G.h; G.dist.fill(1e9);
     const q = G.q || (G.q = new Int32Array(N)), inq = G.inq || (G.inq = new Uint8Array(N)); inq.fill(0);
     let h = 0, t = 0; const push = k => { q[t] = k; t = (t + 1) % N; inq[k] = 1; };
-    const k0 = pj * G.w + pi; G.dist[k0] = 0; push(k0);
+    for (const sd of (Z.T && Z.T.length ? Z.T : [{ x: P.x, z: P.z }])) { const [pi, pj] = cell(sd.x, sd.z); if (pi < 0 || pj < 0 || pi >= G.w || pj >= G.h) continue; const k0 = pj * G.w + pi; if (G.dist[k0] > 0) { G.dist[k0] = 0; push(k0); } }   // elke levende speler is een doel
+    if (h === t) return;
     while (h !== t) { const k = q[h]; h = (h + 1) % N; inq[k] = 0; const i = k % G.w, j = (k / G.w) | 0, d = G.dist[k];
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const nk = nj * G.w + ni; if (G.block[nk]) continue; if (di && dj && (G.block[j * G.w + ni] || G.block[nj * G.w + i])) continue; const nd = d + (di && dj ? 1.414 : 1); if (nd < G.dist[nk] - 1e-6) { G.dist[nk] = nd; if (!inq[nk]) push(nk); } } }
   }
   const freeAt = (x, z) => { const i = Math.floor((x - G.x0) / G.s), j = Math.floor((z - G.z0) / G.s); return i >= 0 && j >= 0 && i < G.w && j < G.h && !G.block[j * G.w + i]; };
   function seeLine(x0, z0, x1, z1) { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(L / .08)); for (let k = 1; k <= n; k++) { const t = k / n; if (!freeAt(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return false; } return true; }
   // stuurpunt: volg het afstandsveld tot 12 cellen vooruit en mik op de verste cel die je vrij ziet (geen hoeken afsnijden, niet tegen muren duwen)
-  function steer(z) {
-    if (seeLine(z.x, z.z, P.x, P.z)) return [P.x, P.z];
-    let [ci, cj] = cell(z.x, z.z); if (ci < 0 || cj < 0 || ci >= G.w || cj >= G.h) return [P.x, P.z];
+  function steer(z, T) {
+    if (seeLine(z.x, z.z, T.x, T.z)) return [T.x, T.z];
+    let [ci, cj] = cell(z.x, z.z); if (ci < 0 || cj < 0 || ci >= G.w || cj >= G.h) return [T.x, T.z];
     let bd = G.dist[cj * G.w + ci];
-    if (bd >= 1e8) { let bi = -1, bj = -1; for (let R = 1; R <= 4 && bi < 0; R++) for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const v = G.dist[nj * G.w + ni]; if (v < bd) { bd = v; bi = ni; bj = nj; } } if (bi < 0) return [P.x, P.z]; ci = bi; cj = bj; }
+    if (bd >= 1e8) { let bi = -1, bj = -1; for (let R = 1; R <= 4 && bi < 0; R++) for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const v = G.dist[nj * G.w + ni]; if (v < bd) { bd = v; bi = ni; bj = nj; } } if (bi < 0) return [T.x, T.z]; ci = bi; cj = bj; }
     const chain = [[ci, cj]];
     for (let s = 0; s < 12; s++) { let bi = ci, bj = cj, b = G.dist[cj * G.w + ci]; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ni = ci + di, nj = cj + dj; if ((!di && !dj) || ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; if (di && dj && (G.block[cj * G.w + ni] || G.block[nj * G.w + ci])) continue; const v = G.dist[nj * G.w + ni]; if (v < b - 1e-6) { b = v; bi = ni; bj = nj; } } if (bi === ci && bj === cj) break; ci = bi; cj = bj; chain.push([ci, cj]); }
     const c = (i, j) => [G.x0 + (i + .5) * G.s, G.z0 + (j + .5) * G.s];
@@ -3042,6 +3126,7 @@ const ZB = (() => {
     const z = { x: sx + (Math.random() - .5) * .6, z: sz + (Math.random() - .5) * .6, yaw: 0, hp: (2 + Math.floor(Z.wave / 2)) * (big ? 3 : 1), sp: (fast ? 1.35 : .62 + Z.wave * .05) * (big ? .8 : 1), fast, big, atk: 0, atkT: 0, hitT: 0, dead: 0, flash: 0, tinted: false };
     if (sp.hole) { z.x = sp.hole.x + (sx - sp.hole.x) * .15; z.z = sp.hole.z + (sz - sp.hole.z) * .15; z.crawl = 1.6; z.cx = sx; z.cz = sz; z.yaw = Math.atan2(-(sx - sp.hole.x), -(sz - sp.hole.z)); }   // kruipt uit het gat
     if (Z.mode === 'story') { z.hp = Math.ceil(z.hp * 1.4); z.sp *= 1.08; if (Z.planted && Math.random() < .25) { z.fast = true; z.sp = 1.4; } }
+    z.id = MP.nid++; z.mi = Math.random() * 4 | 0;
     z.av = zombieBody(z); if (big) z.av.scale.setScalar(1.25); scene.add(z.av); Z.list.push(z);
   }
   const ZFACE = Math.PI;
@@ -3049,7 +3134,7 @@ const ZB = (() => {
     const root = new THREE.Group(); root.rotation.order = 'YXZ'; const def = AVATARS[Math.random() * AVATARS.length | 0];
     Promise.all([zombieModels(), zombieClips()]).then(async ([zm, clips]) => {
       if (z.gone) return; let g = null;
-      if (zm && zm.length) { g = { scene: zm[Math.random() * zm.length | 0] }; z.real = true; } else g = await loadGlb(def.glb);
+      if (zm && zm.length) { g = { scene: zm[(z.mi ?? (Math.random() * 4 | 0)) % zm.length] }; z.real = true; } else g = await loadGlb(def.glb);
       if (z.gone) return;
       if (!g || !clips) { const av = makeAvatar(def); root.add(av); z.fb = av; av.userData.post = () => { const B = av.userData.B; if (!B || z.dead) return; for (const sd of ['Left', 'Right']) { const a = B(sd + 'Arm'), f = B(sd + 'ForeArm'), h = B(sd + 'Hand'); if (a && f && h) { const fw = V(-Math.sin(z.yaw), -.15, -Math.cos(z.yaw)); zaim(a, f, fw); zaim(f, h, fw); } } }; return; }
       const model = SkeletonUtils.clone(g.scene); model.rotation.y = z.real ? ZFACE : Math.PI; model.updateMatrixWorld(true);
@@ -3065,7 +3150,7 @@ const ZB = (() => {
     });
     return root;
   }
-  function zplay(z, k, fade = .25, ts = 1) { if (!z.A || !z.A[k]) return; const a = z.A[k]; a.timeScale = ts; if (z.cur === k) return; a.reset(); a.setEffectiveWeight(1); a.play(); if (z.curA && fade > 0) z.curA.crossFadeTo(a, fade, false); else if (z.curA) z.curA.stop(); z.curA = a; z.cur = k; }
+  function zplay(z, k, fade = .25, ts = 1) { if (!z.A || !z.A[k]) return; const a = z.A[k]; a.timeScale = ts; z.ts = ts; if (z.cur === k) return; a.reset(); a.setEffectiveWeight(1); a.play(); if (z.curA && fade > 0) z.curA.crossFadeTo(a, fade, false); else if (z.curA) z.curA.stop(); z.curA = a; z.cur = k; }
   const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
   function zaim(b, c, dir) { b.getWorldPosition(_a); c.getWorldPosition(_b); _b.sub(_a).normalize(); _q.setFromUnitVectors(_b, dir.clone().normalize()); b.getWorldQuaternion(_q2); b.parent.getWorldQuaternion(_q3).invert(); b.quaternion.copy(_q3.multiply(_q.multiply(_q2))); b.updateMatrixWorld(true); }
   function tint(z) { const m = z.model || (z.fb && z.fb.userData.model); if (!m || z.tinted) return; z.tinted = true; const col = new THREE.Color(z.real ? '#ffffff' : ZTINT[Math.random() * 3 | 0]); m.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.color.multiply(col); o.material.emissive = new THREE.Color(z.real ? '#000000' : '#0d1a08'); z.mat = z.mat || []; z.mat.push(o.material); } }); }
@@ -3121,6 +3206,7 @@ const ZB = (() => {
 #zhud .top{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-size:13px;letter-spacing:.25em;color:#b9a99a;text-shadow:1px 1px 0 #000;text-align:center}
 #zhud .top b{color:#d01b1b;font-size:16px}
 #zhud .obj{position:absolute;left:24px;top:84px;max-width:340px;font-size:15px;line-height:1.45;color:#f1e7c8;text-shadow:2px 2px 0 #000;display:none}
+#zhud .team{position:absolute;right:24px;top:200px;font-size:14px;line-height:1.6;color:#f1e7c8;text-shadow:2px 2px 0 #000;display:none;text-align:right}#zhud .team small{display:block;font:18px 'Creepster',Impact,fantasy;color:#c51b14;letter-spacing:.06em}#zhud .team .dn{color:#8a7a6a;text-decoration:line-through}
 #zhud .obj small{display:block;font:20px 'Creepster',Impact,fantasy;color:#c51b14;letter-spacing:.06em}
 #zhud .msg{position:absolute;top:26%;left:50%;transform:translateX(-50%);font:64px/1 'Creepster',Impact,fantasy;color:#a40f0f;text-shadow:0 0 22px rgba(255,0,0,.4),4px 4px 0 #000;text-align:center;white-space:nowrap}
 #zhud .msg small{display:block;font:18px 'Special Elite',monospace;color:#e9dcc6;margin-top:10px;text-shadow:2px 2px 0 #000}
@@ -3161,7 +3247,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
 #zshop .it b{display:block;font:20px 'Creepster',Impact,fantasy;letter-spacing:.04em;color:#f1e7c8}#zshop .it span{display:block;color:#a99a8a;font-size:12px;margin:2px 0 4px}#zshop .it em{font-style:normal;color:#ffd35a}
 #zshop .coins{font:34px 'Creepster',Impact,fantasy;color:#f1e7c8;text-shadow:3px 3px 0 #000}
 </style><div class="vig"></div><div class="white" id="zwh"></div><div class="hurt"></div><div class="xh"></div>
-<div class="top">ZOMBIES <b id="zl">0</b> &nbsp;·&nbsp; SCORE <span id="zs">0</span></div><div class="obj" id="zobj"></div>
+<div class="top">ZOMBIES <b id="zl">0</b> &nbsp;·&nbsp; SCORE <span id="zs">0</span></div><div class="obj" id="zobj"></div><div class="team" id="zteam"></div>
 <div class="round"><small>${TL('GOLF', 'ROUND')}</small><span id="zw">1</span></div><div class="hpw"><i id="zh" style="width:100%"></i></div>
 <div class="pts" id="zpts"><small>${TL('MUNTEN', 'POINTS')}</small><b id="zc">0</b></div>
 <div class="ammo"><div class="wn" id="zg"></div><b id="za">12</b><span class="res" id="zr2"> | 24</span></div>
@@ -3173,7 +3259,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   function say(t, sub = '', dur = 2.2) { const m = $('zm'); if (!m) return; m.innerHTML = t + (sub ? `<small>${sub}</small>` : ''); clearTimeout(say.t); say.t = setTimeout(() => { if ($('zm')) $('zm').innerHTML = ''; }, dur * 1000); }
   function setHud() {
     if (!Z.hud) return; const w = inv();
-    $('zs').textContent = Z.score; $('zc').textContent = Z.coins; $('zl').textContent = Z.list.filter(z => !z.dead).length + Z.toSpawn; $('zh').style.width = Math.max(0, Math.min(100, Z.hp)) + '%'; $('zw').textContent = Z.wave || '';
+    $('zs').textContent = Z.score; $('zc').textContent = Z.coins; $('zl').textContent = MP.role === 'client' ? (Z.netLeft || 0) : Z.list.filter(z => !z.dead).length + Z.toSpawn; $('zh').style.width = Math.max(0, Math.min(100, Z.hp)) + '%'; $('zw').textContent = Z.wave || '';
     const mel = GUNS[Z.gun].melee; $('za').textContent = mel ? '—' : Z.reloadT > 0 ? '…' : w.ammo; $('zr2').textContent = mel ? '' : ' | ' + w.res; $('zg').textContent = gname(Z.gun);
     // inventaris onderaan: wapens met hun toets, daarna flashbang (G) en verband (H)
     const slot = (key, k, txt, own, on) => `<div class="slot${own ? '' : ' off'}${on ? ' on' : ''}"><kbd>${key}</kbd><img src="${icon(k)}"><span>${txt}</span></div>`;
@@ -3220,14 +3306,14 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
   function lockFor(d) { return LOCKS.find(l => l.names.includes(d.name)); }
   function setupStory() {
-    Z.zones = new Set(['koer']); Z.parts = new Set(); Z.carry = false; Z.planted = false; Z.bombT = 0; Z.won = false;
+    Z.zones = new Set(['koer']); Z.unl = new Set(); Z.parts = new Set(); Z.carry = false; Z.planted = false; Z.bombT = 0; Z.won = false;
     for (const d of doors) { const l = lockFor(d); d.locked = !!l; d.target = l ? 0 : 1; }
     Z.partMeshes = PARTS.map((p, i) => { const m = partMesh(p, i); scene.add(m); return m; });
     buildGrid(); flow();
   }
-  function unlock(l) {
-    if (Z.coins < l.price) { say(TL('Te weinig munten', 'Not enough points'), l.price + ' ' + TL('nodig', 'needed'), 1.6); sfx(120, .15, 'square', .05); return; }
-    Z.coins -= l.price; for (const d of doors) if (l.names.includes(d.name)) { d.locked = false; d.target = 1; }
+  function unlock(l, free) {
+    if (!free && Z.coins < l.price) { say(TL('Te weinig munten', 'Not enough points'), l.price + ' ' + TL('nodig', 'needed'), 1.6); sfx(120, .15, 'square', .05); return; }
+    if (!free) Z.coins -= l.price; Z.unl.add(LOCKS.indexOf(l)); if (!free && MP.role === 'client') send('act', { a: 'u', i: LOCKS.indexOf(l) }); for (const d of doors) if (l.names.includes(d.name)) { d.locked = false; d.target = 1; }
     // alle deuren naar dezelfde zone mogen ook open
     Z.zones.add(l.zone); sfx(220, .3, 'sawtooth', .05, 200); noise(.25, .08); buildGrid(); flow(); setHud(); objective();
   }
@@ -3244,14 +3330,14 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   function action() {
     for (const sh of SHOPS) if (Math.hypot(P.x - sh.x, P.z - sh.z) < 1.3 && (Z.mode !== 'story' || Z.zones.has(sh.zone))) return { txt: TL('winkel', 'Shop'), go: () => openShop(sh) };
     if (Z.mode !== 'story') return null;
-    for (let i = 0; i < PARTS.length; i++) { const p = PARTS[i]; if (!Z.parts.has(i) && Math.hypot(P.x - p.x, P.z - p.z) < 1.2) return { txt: TL(p.nl + ' oppakken', 'Pick up ' + p.en.toLowerCase()), go: () => { Z.parts.add(i); scene.remove(Z.partMeshes[i]); sfx(660, .12, 'triangle', .06); setTimeout(() => sfx(990, .2, 'triangle', .05), 120); say(TL(p.nl, p.en), TL(`onderdeel ${Z.parts.size}/${PARTS.length}`, `part ${Z.parts.size}/${PARTS.length}`), 2); objective(); } }; }
-    if (Z.parts.size === PARTS.length && !Z.carry && !Z.planted && Math.hypot(P.x - BENCH.x, P.z - BENCH.z) < 1.4) return { txt: TL('bom bouwen', 'Build the bomb'), go: () => { Z.carry = true; noise(.4, .08); sfx(300, .4, 'square', .04, 300); say(TL('Bom gebouwd', 'Bomb built'), TL('breng hem naar de garagepoort', 'take it to the garage gate'), 2.5); objective(); } };
-    if (Z.carry && Math.hypot(P.x - PLANT.x, P.z - PLANT.z) < 1.6) return { txt: TL('bom plaatsen', 'Plant the bomb'), go: () => { Z.carry = false; Z.planted = true; Z.bombT = BOMB_T; bombMesh.position.set((PLANT.x + .9) * WS, groundAt(PLANT.x + .9, PLANT.z) * WS, PLANT.z * WS); scene.add(bombMesh); say(TL('Bom geplaatst', 'Bomb planted'), TL('hou het nog 90 seconden vol', 'hold out for 90 more seconds'), 3); objective(); } };
+    for (let i = 0; i < PARTS.length; i++) { const p = PARTS[i]; if (!Z.parts.has(i) && Math.hypot(P.x - p.x, P.z - p.z) < 1.2) return { txt: TL(p.nl + ' oppakken', 'Pick up ' + p.en.toLowerCase()), go: () => { Z.parts.add(i); scene.remove(Z.partMeshes[i]); if (MP.role === 'client') send('act', { a: 'p', i }); sfx(660, .12, 'triangle', .06); setTimeout(() => sfx(990, .2, 'triangle', .05), 120); say(TL(p.nl, p.en), TL(`onderdeel ${Z.parts.size}/${PARTS.length}`, `part ${Z.parts.size}/${PARTS.length}`), 2); objective(); } }; }
+    if (Z.parts.size === PARTS.length && !Z.carry && !Z.planted && Math.hypot(P.x - BENCH.x, P.z - BENCH.z) < 1.4) return { txt: TL('bom bouwen', 'Build the bomb'), go: () => { Z.carry = true; if (MP.role === 'client') send('act', { a: 'b' }); noise(.4, .08); sfx(300, .4, 'square', .04, 300); say(TL('Bom gebouwd', 'Bomb built'), TL('breng hem naar de garagepoort', 'take it to the garage gate'), 2.5); objective(); } };
+    if (Z.carry && Math.hypot(P.x - PLANT.x, P.z - PLANT.z) < 1.6) return { txt: TL('bom plaatsen', 'Plant the bomb'), go: () => { if (MP.role === 'client') { send('act', { a: 'pl' }); Z.carry = false; } else plantBomb(); } };
     const d = findDoor(); if (d && d.locked) { const l = lockFor(d); if (l) return { txt: TL(l.nl + ' openen', 'Open ' + l.en.replace(/^Stijn/, "Stijn")), price: l.price, go: () => unlock(l) }; }
     return null;
   }
   function win() {
-    Z.won = true; Z.white = 1.6; noise(1.2, .4); sfx(60, 1.5, 'sawtooth', .1, -40); boomL.position.copy(bombMesh.position); Z.boom = .6;
+    if (Z.won) return; if (MP.role === 'host') send('win'); Z.won = true; Z.white = 1.6; noise(1.2, .4); sfx(60, 1.5, 'sawtooth', .1, -40); boomL.position.copy(bombMesh.position); Z.boom = .6;
     for (const z of Z.list) if (!z.dead) { z.dead = 1e-3; z.stun = 0; } setTimeout(() => stop(true), 3500);
   }
   // ── startmenu: modus kiezen, uitleg en taal, terwijl wapens, zombies en het nachtlicht worden voorbereid
@@ -3261,13 +3347,13 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
 <div class="grid"><div><h3>${TL('Bediening', 'Controls')}</h3><ul><li><kbd>WASD</kbd>${TL('lopen', 'move')} · <kbd>Shift</kbd>${TL('sneller', 'sprint')}</li><li><kbd>${TL('klik', 'click')}</kbd>${TL('schieten / slaan', 'shoot / swing')}</li><li><kbd>R</kbd>${TL('herladen', 'reload')} · <kbd>1</kbd>–<kbd>4</kbd>${TL('wapens', 'weapons')}</li><li><kbd>G</kbd>flashbang · <kbd>H</kbd>${TL('verband', 'medkit')}</li><li><kbd>E</kbd>${TL('winkel, deuren, onderdelen', 'shop, doors, parts')}</li><li><kbd>Backspace</kbd>${TL('stoppen', 'quit')}</li></ul></div>
 <div><h3>${TL('Munten en winkel', 'Points and shop')}</h3><ul><li>${TL('Zombies leveren munten op, hoofdschoten meer', 'Zombies give points, headshots more')}</li><li>${TL('Winkels: keukeneiland en picknicktafel in de koer', 'Shops: kitchen island and the courtyard picnic table')}</li><li>${TL('Kogels zijn beperkt: koop bij of gebruik de knuppel', 'Ammo is limited: buy more or use the bat')}</li><li>${TL('Het spel pauzeert terwijl je winkelt', 'The game pauses while you shop')}</li></ul></div></div>
 <div class="load"><i id="zml"></i></div><div class="row" style="margin-top:8px"><span class="st" id="zms">${TL('laden…', 'loading…')}</span></div>
-<div class="modes"><button class="mode" id="zmb" disabled><b>${TL('Eindeloos', 'Endless')}</b>${TL('Alles is open. Overleef zo veel mogelijk golven.', 'Everything is open. Survive as many rounds as you can.')}</button><button class="mode" id="zms2" disabled><b>${TL('Verhaal', 'Story')}</b>${TL('Je begint in de koer. Koop deuren open, zoek 4 onderdelen, bouw de bom en blaas alle zombies op.', 'You start in the courtyard. Buy doors open, find 4 parts, build the bomb and blow up every zombie.')}</button></div></div>`;
+<div class="modes">${MP.open && performance.now() - MP.open.t < 10000 ? `<button class="mode" id="zjoin" disabled style="grid-column:1/-1;background:#0d4d2a;border-color:#2fbf6a"><b>${TL('Meedoen', 'Join')}</b>${MP.open.name.replace(/[<>&]/g, '')} ${TL('speelt al', 'is already playing')} (${MP.open.mode === 'story' ? TL('verhaal', 'story') : TL('eindeloos', 'endless')}) · ${TL('speel samen', 'play together')}</button>` : ''}<button class="mode" id="zmb" disabled><b>${TL('Eindeloos', 'Endless')}</b>${TL('Alles is open. Overleef zo veel mogelijk golven.', 'Everything is open. Survive as many rounds as you can.')}</button><button class="mode" id="zms2" disabled><b>${TL('Verhaal', 'Story')}</b>${TL('Je begint in de koer. Koop deuren open, zoek 4 onderdelen, bouw de bom en blaas alle zombies op.', 'You start in the courtyard. Buy doors open, find 4 parts, build the bomb and blow up every zombie.')}</button></div></div>`;
   }
   function menu() {
     const m = document.createElement('div'); m.id = 'zmenu'; document.body.appendChild(m);
-    const render = () => { const ready = Z.ready; m.innerHTML = menuHTML(); if (ready) { m.querySelector('#zmb').disabled = false; m.querySelector('#zms2').disabled = false; m.querySelector('#zml').style.width = '100%'; m.querySelector('#zms').textContent = TL('klaar · kies een modus', 'ready · pick a mode'); }
+    const render = () => { const ready = Z.ready; m.innerHTML = menuHTML(); if (ready) { m.querySelector('#zmb').disabled = false; m.querySelector('#zms2').disabled = false; if (m.querySelector('#zjoin')) m.querySelector('#zjoin').disabled = false; m.querySelector('#zml').style.width = '100%'; m.querySelector('#zms').textContent = TL('klaar · kies een modus', 'ready · pick a mode'); }
       m.querySelectorAll('.lang button').forEach(b => b.onclick = () => { setLang(b.dataset.l); render(); const old = Z.hud; Z.hud = hud(); old.remove(); setHud(); });
-      m.querySelector('#zmb').onclick = () => begin('endless'); m.querySelector('#zms2').onclick = () => begin('story'); };
+      m.querySelector('#zmb').onclick = () => begin('endless'); m.querySelector('#zms2').onclick = () => begin('story'); const jb = m.querySelector('#zjoin'); if (jb) jb.onclick = () => begin(null, true); };
     m.render = render; render(); return m;
   }
   async function warm() {
@@ -3307,8 +3393,8 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     }
   }
   function openShop(sh) {
-    if (Z.shop) return; Z.paused = true; Z.firing = false; try { document.exitPointerLock(); } catch (e) { }
-    const s = document.createElement('div'); s.id = 'zshop'; s.innerHTML = `<div class="zc"><div class="row" style="margin-top:0"><h3 style="margin:0">${TL('Winkel', 'Shop')} · ${TL(sh.nl, sh.en)}</h3><span class="coins"></span></div><div class="cats"></div><div class="row"><span style="color:#a9a69f;font-size:13px">${TL('Het spel staat op pauze.', 'The game is paused.')} <kbd>E</kbd>/<kbd>Esc</kbd> ${TL('sluit', 'closes')}</span><button id="zsx">${TL('Terug naar het gevecht', 'Back to the fight')}</button></div></div>`;
+    if (Z.shop) return; Z.paused = MP.role === 'solo'; Z.firing = false; try { document.exitPointerLock(); } catch (e) { }
+    const s = document.createElement('div'); s.id = 'zshop'; s.innerHTML = `<div class="zc"><div class="row" style="margin-top:0"><h3 style="margin:0">${TL('Winkel', 'Shop')} · ${TL(sh.nl, sh.en)}</h3><span class="coins"></span></div><div class="cats"></div><div class="row"><span style="color:#a9a69f;font-size:13px">${MP.role === 'solo' ? TL('Het spel staat op pauze.', 'The game is paused.') : TL('Opgelet: samen spelen loopt door!', 'Careful: the co-op game keeps running!')} <kbd>E</kbd>/<kbd>Esc</kbd> ${TL('sluit', 'closes')}</span><button id="zsx">${TL('Terug naar het gevecht', 'Back to the fight')}</button></div></div>`;
     document.body.appendChild(s); Z.shop = s; renderShop(); s.querySelector('#zsx').onclick = closeShop;
   }
   function closeShop() { if (!Z.shop) return; Z.shop.remove(); Z.shop = null; Z.paused = false; tryLock(); }
@@ -3326,14 +3412,15 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   function batHit() {
     const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let n = 0;
     for (const z of Z.list) { if (z.dead || n >= 2) continue; const dx = z.x - P.x, dz = z.z - P.z, d = Math.hypot(dx, dz); if (d > 1.45 || (dx * fx + dz * fz) / (d || 1) < .4 || hitWall(P.x, P.z, z.x, z.z)) continue;
-      n++; z.hp -= 1; z.flash = .12; z.kb = .5; z.hitT = .5; z.x += dx / (d || 1) * .3; z.z += dz / (d || 1) * .3; zcollide(z); if (z.hp <= 0) kill(z, false); }
+      n++; z.flash = .12; if (MP.role === 'client') { send('hit', { id: z.id, d: 1, h: 0 }); continue; } z.hp -= 1; z.kb = .5; z.hitT = .5; z.x += dx / (d || 1) * .3; z.z += dz / (d || 1) * .3; zcollide(z); if (z.hp <= 0) kill(z, false); }
     if (n) { noise(.08, .2); sfx(120, .1, 'square', .07); } setHud();
   }
   // ── starten en stoppen
   function start() {
     if (Z.active) return; if (SIT.seat) return; P.yaw = Math.PI / 2; P.pitch = 0; Z.active = true; Z.phase = 'menu'; Z.mode = 'endless'; Z.ready = false; document.body.classList.add('zbmode'); sizeMap(); Z.prevThird = third; third = false; NIGHT.enable(); Z.groanT = 2;
     for (const d of doors) { d.locked = false; d.target = 1; } buildGrid(); flow();
-    Object.assign(Z, { wave: 0, score: 0, kills: 0, coins: 0, hp: 100, gun: 'pistool', reloadT: 0, between: 1.5, toSpawn: 0, flash: 0, med: 0, paused: false, nades: [], boom: 0, zones: null, parts: new Set(), carry: false, planted: false, won: false, t0: performance.now(),
+    MP.role = 'solo'; MP.players.clear(); MP.last = null; MP.team = []; MP.lastBt = null;
+    Object.assign(Z, { down: false, wave: 0, score: 0, kills: 0, coins: 0, hp: 100, gun: 'pistool', reloadT: 0, between: 1.5, toSpawn: 0, flash: 0, med: 0, paused: false, nades: [], boom: 0, zones: null, parts: new Set(), carry: false, planted: false, won: false, t0: performance.now(),
       inv: { pistool: { owned: true, ammo: 12, res: 24 }, geweer: { owned: false, ammo: 0, res: 0 }, kriss: { owned: false, ammo: 0, res: 0 }, knuppel: { owned: true, ammo: Infinity, res: Infinity } } });
     rifle.forEach(m => m.visible = false); gun.visible = false;
     scene.add(...signs, boomL); boomL.intensity = 0;
@@ -3342,14 +3429,17 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     Z.menu = menu();
     warm().then(() => { Z.ready = true; if (Z.menu) Z.menu.render(); }).catch(e => { console.warn(e); Z.ready = true; if (Z.menu) Z.menu.render(); });
   }
-  function begin(mode) {
-    if (!Z.active || !Z.menu) return; Z.mode = mode; Z.menu.remove(); Z.menu = null; Z.phase = 'play'; P.yaw = Math.PI / 2; P.pitch = 0; Z.t0 = performance.now();
+  function begin(mode, join) {
+    if (!Z.active || !Z.menu) return;
+    if (join && MP.open) { MP.role = 'client'; MP.sid = MP.open.sid; mode = MP.open.mode; } else if (online()) { MP.role = 'host'; MP.sid = Math.random().toString(36).slice(2, 10); MP.openT = 0; MP.stT = 0; } else MP.role = 'solo';
+    Z.mode = mode; Z.menu.remove(); Z.menu = null; Z.phase = 'play'; P.yaw = Math.PI / 2; P.pitch = 0; Z.t0 = performance.now();
     if (mode === 'story') { setupStory(); say(TL('Verhaal', 'Story'), TL('koop deuren open en zoek de onderdelen van de bom', 'buy doors open and find the bomb parts'), 3.2); }
     else say(TL('Zombie-aanval', 'Zombie attack'), TL('ze komen van overal binnen', 'they are coming from everywhere'), 2.5);
+    if (MP.role === 'client') { send('join', { n: myN() }); say(TL('Samen spelen', 'Co-op'), TL('je speelt mee met ', 'you joined ') + MP.open.name, 3); }
     objective(); tryLock(); sfx(110, .8, 'sawtooth', .07, -50); setHud();
   }
   function stop(showResult) {
-    if (!Z.active) return; Z.active = false; third = Z.prevThird; gun.visible = false; bat.visible = false; WPN.hide(); NIGHT.disable(); document.body.classList.remove('zbmode'); sizeMap();
+    if (!Z.active) return; if (MP.role === 'host') send('end'); else if (MP.role === 'client') send('leave'); const wasRole = MP.role; MP.role = 'solo'; MP.players.clear(); Z.down = false; Z.active = false; third = Z.prevThird; gun.visible = false; bat.visible = false; WPN.hide(); NIGHT.disable(); document.body.classList.remove('zbmode'); sizeMap();
     for (const z of Z.list) { z.gone = true; scene.remove(z.av); } Z.list = []; for (const n of Z.nades || []) scene.remove(n.m); Z.nades = [];
     for (const m of Z.partMeshes || []) scene.remove(m); Z.partMeshes = []; scene.remove(bombMesh); for (const d of doors) d.locked = false;
     scene.remove(...signs, boomL); if (Z.hud) Z.hud.remove(); Z.hud = null; if (Z.menu) Z.menu.remove(); Z.menu = null; if (Z.shop) Z.shop.remove(); Z.shop = null; Z.paused = false;
@@ -3374,12 +3464,12 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
       bt = t; best = z; head = y > Hh * .8;
     }
     if (best && hitWall(o.x / WS, o.z / WS, best.x, best.z)) best = null;
-    if (best) { best.hp -= head ? 2 : 1; best.flash = .12; best.kb = .12; best.hitT = .45; sfx(head ? 900 : 520, .06, 'square', .05); if (best.hp <= 0) kill(best, head); }
+    if (best) { best.flash = .12; sfx(head ? 900 : 520, .06, 'square', .05); if (MP.role === 'client') send('hit', { id: best.id, d: head ? 2 : 1, h: head ? 1 : 0 }); else { best.hp -= head ? 2 : 1; best.kb = .12; best.hitT = .45; if (best.hp <= 0) kill(best, head); } }
     if (w.ammo === 0) setTimeout(() => { if (inv().res > 0) reload(); else outOfAmmo(); }, 200); setHud();
   }
   function reload() { if (GUNS[Z.gun].melee) return; const w = inv(); if (Z.reloadT > 0 || w.ammo >= GUNS[Z.gun].mag || w.res <= 0) { if (w.res <= 0 && w.ammo === 0) say(TL('Geen kogels meer', 'No ammo left'), TL('koop kogels of wissel van wapen', 'buy ammo or switch weapons'), 2); return; } Z.reloadT = WPN.ready && WPN.cur ? WPN.play('reload', 1.9) : 1.4; sfx(300, .05); setTimeout(() => sfx(420, .05), 500); setHud(); }
   function finishReload() { const w = inv(), need = GUNS[Z.gun].mag - w.ammo, take = Math.min(need, w.res); w.ammo += take; if (w.res !== Infinity) w.res -= take; setHud(); }
-  function kill(z, head) { z.dead = 1e-3; Z.kills++; const base = Z.mode === 'story' ? 20 : 10, c = (base + (head ? Math.round(base * .5) : 0)) * (z.big ? 3 : 1); Z.coins += c; pop(c); Z.score += Math.round(c * (1 + Z.wave * .25)); sfx(140, .4, 'sawtooth', .05, -80); setHud(); }
+  function kill(z, head) { z.dead = 1e-3; award(head, z.big); }
   // ── flashbang en verband
   function throwFlash() {
     if (Z.flash <= 0) { say(TL('Geen flashbangs', 'No flashbangs'), TL('te koop in de winkel', 'buy them at a shop'), 1.5); return; } Z.flash--; setHud();
@@ -3391,7 +3481,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     noise(.5, .3); sfx(2200, .35, 'sine', .08, -1800); boomL.position.copy(p); Z.boom = .25;
     const px = p.x / WS, pz = p.z / WS, me = Math.hypot(px - P.x, pz - P.z);
     if (me < 9 && !hitWall(px, pz, P.x, P.z)) { const look = camera.getWorldDirection(new THREE.Vector3()), to = p.clone().sub(camera.getWorldPosition(new THREE.Vector3())).normalize(); Z.white = Math.max(Z.white || 0, (1 - me / 9) * (look.dot(to) > .2 ? 1 : .45)); }
-    for (const z of Z.list) if (!z.dead && Math.hypot(z.x - px, z.z - pz) < 4.5 && !hitWall(px, pz, z.x, z.z)) { z.stun = 4; z.atkT = 0; }
+    if (MP.role === 'client') send('stun', { x: px, z: pz }); else for (const z of Z.list) if (!z.dead && Math.hypot(z.x - px, z.z - pz) < 4.5 && !hitWall(px, pz, z.x, z.z)) { z.stun = 4; z.atkT = 0; }
   }
   function useMed() { if (Z.med <= 0) { say(TL('Geen verband', 'No medkits'), TL('te koop in de winkel', 'buy them at a shop'), 1.5); return; } if (Z.hp >= 100) return; Z.med--; Z.hp = Math.min(100, Z.hp + 50); sfx(660, .12, 'triangle', .05); setTimeout(() => sfx(990, .15, 'triangle', .05), 120); setHud(); }
   function updateHint() {
@@ -3399,7 +3489,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     if (!a) { h.style.display = 'none'; return; } h.style.display = 'block';
     h.innerHTML = `<b>E</b>${a.txt}` + (a.price ? ` <em class="${Z.coins < a.price ? 'no' : ''}">[${a.price}]</em>` : '');
   }
-  document.addEventListener('mousedown', e => { if (!Z.active || Z.phase !== 'play' || Z.paused || !locked || e.button !== 0) return; Z.firing = true; if (Z.fireT <= 0) shoot(); });
+  document.addEventListener('mousedown', e => { if (!Z.active || Z.phase !== 'play' || Z.paused || Z.down || !locked || e.button !== 0) return; Z.firing = true; if (Z.fireT <= 0) shoot(); });
   addEventListener('mouseup', () => { Z.firing = false; });
   addEventListener('keydown', e => {
     if (!Z.active || GM.active) return;
@@ -3422,6 +3512,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     if (!Z.active) return;
     NIGHT.update(dt);
     if (Z.phase !== 'play' || Z.paused) return;
+    hookNet(); Z.T = MP.role === 'client' ? [] : targets();
     Z.groanT -= dt;
     if (Z.groanT <= 0) { Z.groanT = 1.2 + Math.random() * 2.5; let best = null, bd = 14; for (const z of Z.list) { if (z.dead) continue; const dd = Math.hypot(z.x - P.x, z.z - P.z); if (dd < bd && Math.random() < .6) { bd = dd; best = z; } } if (best) NIGHT.groan(.07 * (1 - bd / 14) + .01); }
     Z.fireT -= dt; if (Z.firing && (GUNS[Z.gun].auto || GUNS[Z.gun].melee) && Z.fireT <= 0) shoot();
@@ -3430,11 +3521,13 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     if (Z.reloadT > 0) { Z.reloadT -= dt; if (Z.reloadT <= 0) finishReload(); }
     flash.visible = !WPN.ready && Z.fireT > (Z.gun === 'geweer' ? .07 : .15); WPN.update(dt); Z.kick = Math.max(0, (Z.kick || 0) - dt * 8);
     gun.position.set(.17, -.15 + Math.sin(performance.now() / 300) * .003 * Math.min(1, mySpeed), -.36 + Z.kick * .04); gun.rotation.x = Z.kick * .12 + (Z.reloadT > 0 ? .6 : 0); rifle.forEach(m => m.visible = Z.gun === 'geweer');
-    // golven
+    // golven (alleen de spelleider of wie alleen speelt)
     const alive = Z.list.filter(z => !z.dead).length;
-    if (!Z.toSpawn && !alive) { Z.between -= dt; if (Z.between <= 0) { Z.wave++; Z.toSpawn = 3 + Z.wave * 3; Z.between = 4; if (Z.wave > 1) { Z.score += Z.wave * 25; Z.coins += Z.mode === 'story' ? 40 + Z.wave * 8 : 20 + Z.wave * 5; } if (Z.wave === 2) say(TL('Golf 2', 'Round 2'), TL('kogels en meer: winkel in de koer en de keuken (E)', 'ammo and more: shops in the courtyard and kitchen (E)')); else say(TL('Golf ', 'Round ') + Z.wave, Z.wave >= 5 ? TL('er lopen ook grote zombies rond', 'big zombies are roaming too') : Z.wave >= 3 ? TL('sommige zombies lopen hard', 'some zombies are running') : ''); setHud(); } }
+    if (MP.role !== 'client') {
+    if (!Z.toSpawn && !alive) { Z.between -= dt; if (Z.between <= 0) { Z.wave++; if (MP.role === 'host') { revive(); for (const p of MP.players.values()) p.down = false; } Z.toSpawn = 3 + Z.wave * 3; Z.between = 4; if (Z.wave > 1) { Z.score += Z.wave * 25; Z.coins += Z.mode === 'story' ? 40 + Z.wave * 8 : 20 + Z.wave * 5; } if (Z.wave === 2) say(TL('Golf 2', 'Round 2'), TL('kogels en meer: winkel in de koer en de keuken (E)', 'ammo and more: shops in the courtyard and kitchen (E)')); else say(TL('Golf ', 'Round ') + Z.wave, Z.wave >= 5 ? TL('er lopen ook grote zombies rond', 'big zombies are roaming too') : Z.wave >= 3 ? TL('sommige zombies lopen hard', 'some zombies are running') : ''); setHud(); } }
     if (Z.toSpawn > 0 && alive < (Z.planted ? 16 : Z.mode === 'story' ? 12 : 10)) { Z.spawnT -= dt; if (Z.spawnT <= 0) { spawn(); Z.toSpawn--; Z.spawnT = Math.max(.4, 1.6 - Z.wave * .1) * (Z.planted ? .4 : 1); setHud(); } }
     Z.gridT -= dt; if (Z.gridT <= 0) { flow(); Z.gridT = .3; }
+    }
     // flashbangs: boog, stuiteren op de vloer, ontploffen na 1,2 s
     for (const n of Z.nades) { n.v.y -= 9.8 * dt; const p0 = n.m.position.clone(); n.m.position.addScaledVector(n.v, dt); n.m.rotation.x += dt * 9;
       if (hitWall(p0.x / WS, p0.z / WS, n.m.position.x / WS, n.m.position.z / WS)) { n.m.position.x = p0.x; n.m.position.z = p0.z; n.v.x *= -.3; n.v.z *= -.3; }
@@ -3444,9 +3537,9 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     Z.boom = Math.max(0, Z.boom - dt); boomL.intensity = Z.boom > 0 ? 80 * Z.boom / .25 : 0;
     Z.white = Math.max(0, (Z.white || 0) - dt * .7); const wh = $('zwh'); if (wh) wh.style.opacity = Math.min(1, Z.white * 1.2);
     updateHint();
-    if (Z.mode === 'story' && Z.planted && !Z.won) { const s0 = Math.ceil(Z.bombT); Z.bombT -= dt; if (Math.ceil(Z.bombT) !== s0) { bombMesh.userData.draw(fmt(Math.max(0, Z.bombT))); objective(); sfx(1200, .05, 'square', .03); } if (Z.bombT <= 0) win(); }
+    if (Z.mode === 'story' && Z.planted && !Z.won && MP.role !== 'client') { const s0 = Math.ceil(Z.bombT); Z.bombT -= dt; if (Math.ceil(Z.bombT) !== s0) { bombMesh.userData.draw(fmt(Math.max(0, Z.bombT))); objective(); sfx(1200, .05, 'square', .03); } if (Z.bombT <= 0) win(); }
     // zombies
-    for (const z of Z.list) {
+    if (MP.role === 'client') clientZombies(dt); else for (const z of Z.list) {
       const av = z.av; tint(z); const real = !!z.mx;
       if (z.dead) {
         z.dead += dt;
@@ -3462,19 +3555,19 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
       if (z.stun > 0) {   // verdoofd door een flashbang
         z.stun -= dt; av.rotation.x = 0; av.rotation.z = Math.sin(performance.now() / 180 + z.x) * .06; if (real) { zplay(z, 'idle2', .2, .6); z.mx.update(dt); } z.flash -= dt; continue;
       } else av.rotation.z = 0;
-      let tx = P.x, tz = P.z; const [ci, cj] = cell(z.x, z.z), dP = Math.hypot(P.x - z.x, P.z - z.z);
-      z.stT = (z.stT || 0) - dt; if (z.stT <= 0 || !z.tg) { z.tg = dP > .9 ? steer(z) : [P.x, P.z]; z.stT = .15; } tx = z.tg[0]; tz = z.tg[1];
+      const T = nearest(z); let tx = T.x, tz = T.z; const [ci, cj] = cell(z.x, z.z), dP = Math.hypot(T.x - z.x, T.z - z.z);
+      z.stT = (z.stT || 0) - dt; if (z.stT <= 0 || !z.tg) { z.tg = dP > .9 ? steer(z, T) : [T.x, T.z]; z.stT = .15; } tx = z.tg[0]; tz = z.tg[1];
       let vx = tx - z.x, vz = tz - z.z; const vl = Math.hypot(vx, vz) || 1; vx /= vl; vz /= vl;
       z.chk = (z.chk || 0) - dt; if (z.chk <= 0) { if (z.lx !== undefined && dP > 1.0 && Math.hypot(z.x - z.lx, z.z - z.lz) < .12 && !(z.atkT > 0)) { const sd = Math.random() < .5 ? 1 : -1; z.ux = -vz * sd; z.uz = vx * sd; z.unst = .7; } z.lx = z.x; z.lz = z.z; z.chk = 1.2; }
       if (z.unst > 0) { z.unst -= dt; vx = vx * .3 + z.ux; vz = vz * .3 + z.uz; }   // vastgelopen: even opzij
       for (const o of Z.list) if (o !== z && !o.dead) { const dx = z.x - o.x, dz = z.z - o.z, dd = Math.hypot(dx, dz); if (dd < .55 && dd > 1e-3) { vx += dx / dd * (.55 - dd) * 2; vz += dz / dd * (.55 - dd) * 2; } }
       z.kb = (z.kb || 0) - dt; z.hitT -= dt; z.atk -= dt;
       const busy = z.atkT > 0 || (real && z.hitT > 0), move = dP > .62 && !busy ? z.sp * (z.kb > 0 ? .25 : 1) * dt : 0;
-      z.x += vx * move; z.z += vz * move; zcollide(z);   /* niet door muren, ramen of meubels */ const want = move > 0 && dP > 1.1 ? Math.atan2(-vx, -vz) : Math.atan2(-(P.x - z.x), -(P.z - z.z));   /* kijkt waar hij heen loopt */ z.yaw += Math.atan2(Math.sin(want - z.yaw), Math.cos(want - z.yaw)) * Math.min(1, dt * 6);
+      z.x += vx * move; z.z += vz * move; zcollide(z);   /* niet door muren, ramen of meubels */ const want = move > 0 && dP > 1.1 ? Math.atan2(-vx, -vz) : Math.atan2(-(T.x - z.x), -(T.z - z.z));   /* kijkt waar hij heen loopt */ z.yaw += Math.atan2(Math.sin(want - z.yaw), Math.cos(want - z.yaw)) * Math.min(1, dt * 6);
       av.position.set(z.x * WS, groundAt(z.x, z.z) * WS, z.z * WS); av.rotation.y = z.yaw; av.rotation.x = 0;
       // aanval: animatie start, schade halverwege als je nog dichtbij staat
-      if (dP < .75 && z.atk <= 0 && z.atkT <= 0 && !hitWall(z.x, z.z, P.x, P.z)) { z.atkT = 1.25; z.atk = 1.7; z.dmg = true; z.atkK = Math.random() < .5 ? 'attack' : 'attack2'; }
-      if (z.atkT > 0) { z.atkT -= dt; if (z.dmg && z.atkT < .65) { z.dmg = false; if (dP < 1.0) { Z.hp -= (z.big ? 18 : 9) + Z.wave; Z.hurtT = .35; noise(.15, .1); sfx(90, .2, 'sawtooth', .06); setHud(); } } }
+      if (!T.none && dP < .75 && z.atk <= 0 && z.atkT <= 0 && !hitWall(z.x, z.z, T.x, T.z)) { z.atkT = 1.25; z.atk = 1.7; z.dmg = true; z.atkK = Math.random() < .5 ? 'attack' : 'attack2'; }
+      if (z.atkT > 0) { z.atkT -= dt; if (z.dmg && z.atkT < .65) { z.dmg = false; if (dP < 1.0) dmgTo(T, (z.big ? 18 : 9) + Z.wave); } }
       if (real) {
         if (z.atkT > 0) zplay(z, z.atkK, .15, (z.atkK === 'attack' ? 2.63 : 4.63) / 1.25);
         else if (z.hitT > 0) zplay(z, 'hit', .1, 4);
@@ -3486,10 +3579,12 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     }
     Z.list = Z.list.filter(z => { if (z.dead > (z.mx ? 4.6 : 3.2)) { z.gone = true; scene.remove(z.av); return false; } return true; });
     Z.hurtT -= dt; const hurt = Z.hud && Z.hud.querySelector('.hurt'); if (hurt) hurt.style.opacity = Math.max(0, Z.hurtT * 2.5) + (Z.hp < 30 ? .25 : 0);
-    if (Z.hp <= 0) stop(true);
+    if (Z.hp <= 0 && !Z.down) { if (MP.role === 'solo') { stop(true); return; } Z.down = true; Z.firing = false; say(TL('Je ligt neer', 'You are down'), TL('bij de volgende golf sta je weer op', 'you get back up next round'), 3); send('down'); }
+    if (MP.role === 'host') { if (Z.down && ![...MP.players.values()].some(p => !p.down)) { send('over'); stop(true); return; } hostTick(dt); }
+    Z.teamT = (Z.teamT || 0) - dt; if (Z.teamT <= 0) { Z.teamT = .5; teamHud(); }
   }
   SPOTS.push({ x: 24.9, z: -2.0, tx: 26.5, tz: -2.0, r: 1.8, label: 'zombie-aanval (garagepoort)', act: start });
-  return { Z, update, start, stop, get active() { return Z.active; } };
+  return { Z, MP, update, start, stop, begin, dbgHit: id => send('hit', { id, d: 2, h: 1 }), get active() { return Z.active; } };
 })();
 { const card = document.getElementById('card'); if (card) { card.style.position = 'relative'; const sw = document.createElement('div'); sw.id = 'langsw'; sw.innerHTML = '<button type="button" data-l="nl">NL</button><button type="button" data-l="en">EN</button>';
     const st = document.createElement('style'); st.textContent = '#langsw{position:absolute;right:16px;top:14px;display:flex;gap:6px;z-index:2}#langsw button{font:600 12px var(--mono,monospace);padding:4px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;cursor:pointer}#langsw button.sel{background:#e0a33a;color:#15171c;border-color:#e0a33a}'; document.head.appendChild(st);
