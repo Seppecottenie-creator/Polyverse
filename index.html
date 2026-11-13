@@ -353,6 +353,16 @@ function leafSolid(L, h, mat, th = .04, lever = M.white) {
   for (const s of [1, -1]) { lb(g, L - .2, L - .07, 1.02, 1.045, s * th / 2, s * (th / 2 + .05), lever); cyl(g, L - .085, 1.0, s * (th / 2 + .01), .03, .03, .065, lever, 10).rotation.x = Math.PI / 2; }
   return g;
 }
+function leafArch(L, hs) {   // deurblad met halfronde bovenkant (alu kader, glas)
+  const g = grp(), f = .06, t = .025, R0 = L / 2;
+  const outer = new THREE.Shape(); outer.moveTo(0, 0); outer.lineTo(L, 0); outer.lineTo(L, hs); outer.absarc(R0, hs, R0, 0, Math.PI, false); outer.lineTo(0, 0);
+  const inner = new THREE.Path(); inner.moveTo(f, .1); inner.lineTo(f, hs); inner.absarc(R0, hs, R0 - f, Math.PI, 0, true); inner.lineTo(L - f, .1); inner.lineTo(f, .1); outer.holes.push(inner);
+  const fr = mk(new THREE.ExtrudeGeometry(outer, { depth: 2 * t, bevelEnabled: false, curveSegments: 24 }), M.alu, g); fr.position.z = -t;
+  const gs = new THREE.Shape(); gs.moveTo(f, .1); gs.lineTo(L - f, .1); gs.lineTo(L - f, hs); gs.absarc(R0, hs, R0 - f, 0, Math.PI, false); gs.lineTo(f, .1);
+  mk(new THREE.ShapeGeometry(gs, 24), M.glass, g, { cast: false });
+  lb(g, L - .14, L - .11, .85, 1.45, .03, .055, M.alu); lb(g, L - .14, L - .11, .85, 1.45, -.055, -.03, M.alu);
+  return g;
+}
 function door({ hx, hz, L, h, theta, to, leaf, name }) {
   const pivot = grp(); pivot.position.set(hx, 0, hz); pivot.add(leaf); scene.add(pivot);
   pivot.traverse(o => { if (o.isMesh) { o.castShadow = o.material !== M.glass && o.material !== M.ribbed; o.receiveShadow = true; } });
@@ -367,6 +377,7 @@ function door({ hx, hz, L, h, theta, to, leaf, name }) {
 // westmuur sanitair volgt de schuine perceelgrens: binnenvlak x = -3,02 m aan de achtergevel, -3,38 m bij de zuidmuur
 const SANX = z => -3.024 - .08 * z, SANA = Math.atan(.08);
 // ───────────────────────── shell: floor, roof, ceilings, beams, slats
+T.floor.offset.set(1 - (7.0 / .85) % 1, 1 - ((HD - .25) / .85) % 1);   // voegen van de vloer vallen samen met de deurmat
 bx(-3.42, 19.75, -.05, 0, 0, HD, M.floor, { cast: false });
 bx(-3.7, 20.05, H, H + .3, -.15, HD + .15, M.concrete);           // betonnen plafond (onderkant op 3,0 m)
 { const beam = tx(T.concrete, { color: '#a29d95' }, 1, 1.4); bx(6.1, 6.5, 2.52, H - .001, .002, HD - .002, beam); }   // ruwe betonbalk noord-zuid (foto 3129, 3153), boven het latjesplafond verborgen
@@ -389,11 +400,11 @@ bx(-3.4, -.06, 2.5, 2.55, 0, 4.45, M.white); bx(.06, 1.4, 2.5, 2.55, 0, 2.99, M.
 const rearOps = [
   { a: -2.5, b: -2.15, y0: 1.25, y1: 2.35 }, { a: -1.6, b: -1.2, y0: 1.25, y1: 2.35 }, { a: .25, b: 1.07, y0: 0, y1: WIN },
   { a: 2.53, b: 5.47, y0: 0, y1: WIN }, { a: 8.13, b: 10.03, y0: 0, y1: WIN }, { a: 11.95, b: 14.89, y0: 0, y1: WIN },
-  { a: 15.85, b: 17.32, y0: 0, y1: WIN }, { a: 17.42, b: 18.12, y0: 0, y1: WIN }];
+  { a: 15.85, b: 16.75, y0: 0, y1: WIN }];
 wallX(-.15, 0, -3.4, 19.75, rearOps, M.wall, 0, H, { map: false, col: false });       // binnenspouw (wit, ook de dagkanten)
 wallX(-.3, -.15, -3.7, 20.05, rearOps, M.brickRed, 0, H + .3);                       // gevelsteen buiten
 windowX(-.17, -2.5, -2.15, 1.25, 2.35, { glass: M.frosted }); windowX(-.17, -1.6, -1.2, 1.25, 2.35, { glass: M.frosted });
-windowX(-.17, 2.53, 5.47, 0, WIN); windowX(-.17, 11.95, 14.89, 0, WIN); windowX(-.17, 17.42, 18.12, 0, WIN, { glass: M.frosted }); windowX(-.17, 16.75, 17.32, 0, WIN, { glass: M.frosted });
+windowX(-.17, 2.53, 5.47, 0, WIN); windowX(-.17, 11.95, 14.89, 0, WIN);
 for (const [a, b] of [[.25, 1.07], [8.13, 10.03], [15.85, 16.75]]) { bx(a, b, WIN - .055, WIN, -.205, -.135, M.alu); mapGlass.push([a, b, -.2, -.1]); }
 for (const [a, b] of rearOps.map(o => [o.a, o.b])) bx(a - .02, b + .02, -.02, .015, -.32, 0, M.stone); // dorpels
 
@@ -403,15 +414,15 @@ const streetOps = [...streetWin.map(([a, b]) => ({ a, b, y0: 0, y1: WIN })), { a
 wallX(HD, HD + .15, 0, HW, streetOps, M.wall, 0, H, { map: false, col: false });
 wallX(HD + .15, HD + .3, -.3, 16.0, streetOps, M.brickTan, 0, H + .3);
 streetWin.forEach(([a, b]) => windowX(HD + .17, a, b, 0, WIN));
-// boog boven de inkomdeur: vult de hoeken tussen de rechthoek (tot 2,44 m) en de halve cirkel
+// inkomdeur: de hele boog is deur (geen kalf); ze staat diep in de dagkant want binnen springt het muurstuk rond de deur 25 cm vooruit (foto's 3128, 3159–3162)
+const DZ = HD - .2;
+wallX(HD - .25, HD, 6.55, 9.15, [{ a: 7.2, b: 8.5, y0: 0, y1: DTOP }], M.wall, 0, H);
 {
   const r = .65, top = DTOP - DSP;
   const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(0, top); s.lineTo(1.3, top); s.lineTo(1.3, 0); s.absarc(.65, 0, r, 0, Math.PI, false);
-  for (const [z, d, m] of [[HD, .15, M.wall], [HD + .15, .15, M.brickTan]]) { const e = mk(new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false, curveSegments: 20 }), m); e.position.set(7.2, DSP, z); e.updateMatrixWorld(true); statics.push(e); }
-  const gs = new THREE.Shape(); gs.absarc(0, 0, .6, 0, Math.PI, false); gs.lineTo(.6, 0);
-  const gl = mk(new THREE.ShapeGeometry(gs, 20), M.glass, null, { cast: false }); gl.position.set(7.85, DSP, HD + .15); gl.updateMatrixWorld(true); statics.push(gl);
-  const fr = mk(new THREE.TorusGeometry(.62, .03, 6, 28, Math.PI), M.alu); fr.position.set(7.85, DSP, HD + .15); fr.updateMatrixWorld(true); statics.push(fr);
-  bx(7.2, 8.5, DSP - .03, DSP + .03, HD + .12, HD + .18, M.alu); bx(7.2, 7.255, 0, DSP, HD + .12, HD + .18, M.alu); bx(8.445, 8.5, 0, DSP, HD + .12, HD + .18, M.alu);
+  for (const [z, d, m] of [[HD - .25, .25, M.wall], [HD, .15, M.wall], [HD + .15, .15, M.brickTan]]) { const e = mk(new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false, curveSegments: 20 }), m); e.position.set(7.2, DSP, z); e.updateMatrixWorld(true); statics.push(e); }
+  const fr = mk(new THREE.TorusGeometry(.625, .026, 6, 28, Math.PI), M.alu); fr.position.set(7.85, DSP, DZ); fr.updateMatrixWorld(true); statics.push(fr);
+  bx(7.2, 7.255, 0, DSP, DZ - .03, DZ + .03, M.alu); bx(8.445, 8.5, 0, DSP, DZ - .03, DZ + .03, M.alu);
   // rollaag: radiaal gemetselde stenen in dezelfde gevelsteen, vlak met de gevel
   const bt = std('#bb936f', .95), joint = std('#d2c9bb', 1), N = 25;
   for (let i = 0; i < N; i++) {
@@ -419,12 +430,15 @@ streetWin.forEach(([a, b]) => windowX(HD + .17, a, b, 0, WIN));
     br.position.set(7.85 + Math.cos(a) * .755, DSP + Math.sin(a) * .755, HD + .301); br.rotation.z = a; br.updateMatrixWorld(true); statics.push(br);
   }
   { const js = new THREE.Shape(); js.absarc(0, 0, .865, 0, Math.PI, false); js.lineTo(-.645, 0); js.absarc(0, 0, .645, Math.PI, 0, true); js.lineTo(.865, 0); const jm = mk(new THREE.ShapeGeometry(js, 32), joint, null, { cast: false }); jm.position.set(7.85, DSP, HD + .3005); jm.updateMatrixWorld(true); statics.push(jm); }
-  mapGlass.push([7.2, 8.5, HD + .1, HD + .2]);
+  bx(7.2, 7.212, 0, DSP, DZ + .03, HD + .3, M.brickTan); bx(8.488, 8.5, 0, DSP, DZ + .03, HD + .3, M.brickTan);   // dagkanten in gevelsteen
+  { const rs = new THREE.Shape(); rs.absarc(0, 0, .65, 0, Math.PI, false); rs.lineTo(-.638, 0); rs.absarc(0, 0, .638, Math.PI, 0, true); rs.lineTo(.65, 0);
+    const e = mk(new THREE.ExtrudeGeometry(rs, { depth: HD + .3 - (DZ + .03), bevelEnabled: false, curveSegments: 24 }), M.brickTan); e.position.set(7.85, DSP, DZ + .03); e.updateMatrixWorld(true); statics.push(e); }
+  mapGlass.push([7.2, 8.5, DZ - .05, DZ + .05]);
 }
 // gevel straatkant: blauwe hardsteen plint, dorpels, strekse lateien, trappen
-for (const [a, b] of [[-.3, 7.05], [8.65, 16.0]]) bx(a, b, STREET, .04, HD + .3, HD + .34, M.stone);
+for (const [a, b] of [[-.3, 7.2], [8.5, 16.0]]) bx(a, b, STREET, .04, HD + .3, HD + .34, M.stone);
 for (const [a, b] of streetWin) { bx(a, b, STREET, -.02, HD, HD + .29, M.stone); bx(a - .08, b + .08, -.04, .06, HD + .15, HD + .42, M.stoneLight); bx(a - .12, b + .12, WIN, WIN + .24, HD + .3, HD + .302, tx(T.soldier, {}, .95, .6)); }
-bx(7.2, 8.5, STREET, 0, HD, HD + .15, M.stone); bx(7.2, 8.5, STREET, STREET + .2, HD + .15, HD + .3, M.stone);   // treden binnen de gevelopening
+bx(7.2, 8.5, STREET, 0, DZ - .03, HD + .3, M.stone); bx(7.0, 8.7, STREET, STREET + .2, HD + .3, HD + .62, M.stone);   // bovenste trede in de dagkant, onderste op de stoep
 // ander muren
 wallZ(-.3, 0, 4.75, HD + .15);                       // hal west
 { const L = 5.07, zc = 2.225, m = mk(new THREE.BoxGeometry(.3, H, L), M.wall); m.position.set(SANX(zc) - .15 * Math.cos(SANA), H / 2, zc); m.rotation.y = -SANA; m.updateMatrixWorld(true); statics.push(m);   // sanitair west (schuin)
@@ -450,9 +464,9 @@ function skirtRun(axis, face, dir, s0, s1, gaps = []) {
   let c = s0; const seg = (a, b) => { if (b - a > .02) axis === 'x' ? bx(a, b, 0, .07, Math.min(face, face + dir * .012), Math.max(face, face + dir * .012), M.white, { cast: false }) : bx(Math.min(face, face + dir * .012), Math.max(face, face + dir * .012), 0, .07, a, b, M.white, { cast: false }); };
   for (const [a, b] of [...gaps].sort((p, q) => p[0] - q[0])) { seg(c, a); c = Math.max(c, b); } seg(c, s1);
 }
-skirtRun('x', 0, 1, 2.12, 11.82, [[2.53, 5.47], [5.7, 7.9], [8.13, 10.03]]); skirtRun('x', 0, 1, 11.878, 18.05, [[11.95, 14.89], [15.85, 17.32], [17.42, 18.12]]);
+skirtRun('x', 0, 1, 2.12, 11.82, [[2.53, 5.47], [5.7, 7.9], [8.13, 10.03]]); skirtRun('x', 0, 1, 11.878, 18.05, [[11.95, 14.89], [15.85, 16.75]]);
 skirtRun('x', HD, -1, .15, 14.25, [...streetWin, [7.2, 8.5]]);
-skirtRun('z', 0, 1, 4.75, 4.95); skirtRun('z', 0, 1, 12.5, HD); skirtRun('z', HW, -1, 4.85, 5.0); skirtRun('z', HW, -1, 11.0, HD - .42);
+skirtRun('z', .15, 1, 4.75, 4.95); skirtRun('z', .15, 1, 12.5, HD); skirtRun('z', HW - .15, -1, 4.85, 5.0); skirtRun('z', HW - .15, -1, 11.0, HD);
 skirtRun('x', 4.55, -1, HW, 18.05);
 { const m = mk(new THREE.BoxGeometry(.012, .07, 2.92), M.white, null, { cast: false }); m.position.set(SANX(3.0) + .006, .035, 3.0); m.rotation.y = -SANA; m.updateMatrixWorld(true); statics.push(m); }
 skirtRun('x', 4.45, -1, SANX(4.45), -.06); skirtRun('z', -.06, -1, 1.55, 4.45, [[3.39, 4.39]]); skirtRun('x', 1.55, 1, SANX(1.55), -.06, [[-2.89, -2.01], [-1.88, -1.0], [-.84, -.11]]);
@@ -461,7 +475,7 @@ skirtRun('x', 3.11, 1, .06, 1.52, [[.25, 1.1]]); skirtRun('z', .06, 1, 3.11, 4.4
 for (const [x, z] of [[4.05, 4.35], [11.08, 4.35], [4.05, 8.93], [11.08, 8.93]]) { skirtRun('x', z, -1, x - .012, x + .752); skirtRun('x', z + .42, 1, x - .012, x + .752); skirtRun('z', x, -1, z, z + .42); skirtRun('z', x + .74, 1, z, z + .42); }
 
 // ───────────────────────── doors
-door({ hx: 7.255, hz: HD + .15, L: 1.19, h: DSP, theta: 0, to: [0, -1], leaf: leafGlass(1.19, DSP - .03), name: 'voordeur' });
+door({ hx: 7.255, hz: DZ, L: 1.19, h: DSP + .6, theta: 0, to: [0, -1], leaf: leafArch(1.19, DSP), name: 'voordeur' });
 door({ hx: 8.13, hz: -.15, L: .95, h: WIN, theta: 0, to: [0, 1], leaf: leafGlass(.95, WIN - .06), name: 'terrasdeur' });
 door({ hx: 10.03, hz: -.15, L: .95, h: WIN, theta: Math.PI, to: [0, 1], leaf: leafGlass(.95, WIN - .06), name: 'terrasdeur' });
 door({ hx: .25, hz: -.15, L: .82, h: WIN, theta: 0, to: [0, 1], leaf: leafGlass(.82, WIN - .06), name: 'achterdeur' });
@@ -943,7 +957,7 @@ place(monstera(1.5, false), 10.85, 0, .75); potCol(10.85, .75, .26); place(birdO
 radiatorBox(5.7, 7.9, .02, .16, .12, .72);
 // gordijnen + witte rails (vlak boven de ramen)
 const rail = (x1, x2, zc) => { bx(x1, x2, 2.9, 2.93, zc - .015, zc + .015, M.white, { cast: false }); for (let x = x1 + .3; x < x2; x += 1.2) bx(x - .015, x + .015, 2.93, H - .001, zc - .015, zc + .015, M.white, { cast: false }); };
-for (const [x, w] of [[2.08, .45], [5.47, .45], [7.68, .45], [10.03, .45], [11.9, .4], [14.89, .45], [15.4, .42], [17.32, .1]]) curtain(x, .1, w);
+for (const [x, w] of [[2.08, .45], [5.47, .45], [7.68, .45], [10.03, .45], [11.9, .4], [14.89, .45], [15.4, .42], [16.75, .1]]) curtain(x, .1, w);
 rail(2.0, 6.0, .12); rail(7.6, 10.5, .12); rail(11.9, 18.0, .12);
 
 const EXTRA_PENDANT = [];
@@ -1017,7 +1031,7 @@ for (const [x, z] of [[8.9, 7.0], [8.9, 7.8]]) { const l = new THREE.PointLight(
 // ───────────────────────── inkom: terrazzo blok met POLYGON-logo, planten
 bx(6.5, 9.2, 0, .96, 10.38, 10.8, M.terr, { col: true });
 plane(.9, .45, M.logo, 7.25, .5, 10.803, 0);
-bx(7.1, 8.6, 0, .015, 12.4, 13.15, std('#2e2f30', 1), { cast: false });
+bx(7.0, 8.7, 0, .015, HD - .25 - .85, HD - .25, std('#2e2f30', 1), { cast: false });   // deurmat = 2 vloertegels van 85 cm
 place(monstera(), 9.45, 0, 12.6); potCol(9.45, 12.6, .3); place(palm(), 10.35, 0, 12.85); potCol(10.35, 12.85, .2);
 { const g = grp(); cyl(g, 0, 0, 0, .14, .11, .3, M.potGrey, 10); for (let i = 0; i < 5; i++) cylB(g, V(0, .3, 0), V((rnd() - .5) * .4, .8 + rnd() * .4, (rnd() - .5) * .4), .008, M.leaf2, 4); for (let i = 0; i < 18; i++) { const l = mk(leafShape(.07, .025), M.leaf2, g); l.position.set((rnd() - .5) * .35, .45 + rnd() * .6, (rnd() - .5) * .35); l.rotation.set(rnd() * 3, rnd() * 3, 0); } place(g, 6.0, 0, 12.7); potCol(6.0, 12.7, .15); }
 for (const [x, w] of [[1.2, .43], [2.78, .45], [4.59, .45], [6.48, .45], [8.77, .45], [10.37, .45], [12.18, .45], [13.99, .24]]) curtain(x, HD - .18, w);
@@ -1035,6 +1049,7 @@ function radNiche(x1, x2, inner, z1, z2) {   // voorzetwand met nis; de latten l
   addCol(x1, x2, z1, z2); mapWalls.push([x1, x2, z1, z2]);
 }
 radNiche(0, .15, .15, 4.95, 12.5); radNiche(HW - .15, HW, HW - .15, 5.0, 11.0);
+for (const [x1, x2, z1, z2] of [[0, .15, 4.75, 4.95], [0, .15, 12.5, HD], [HW - .15, HW, 4.85, 5.0], [HW - .15, HW, 11.0, HD]]) { bx(x1, x2, 0, H - .001, z1, z2, M.wall); addCol(x1, x2, z1, z2); mapWalls.push([x1, x2, z1, z2]); }   // één doorlopende muur
 { const g = grp(); cyl(g, 0, 0, 0, .16, .13, .3, M.potGrey, 10); for (let i = 0; i < 10; i++) { const l = mk(leafShape(.35, .07), M.leaf2, g); l.position.set(0, .28, 0); l.rotation.set(-.6 - rnd() * .5, rnd() * 6.3, 0, 'YXZ'); } place(g, .45, 0, 12.6); potCol(.45, 12.6, .17); }
 
 // ───────────────────────── Bureau Stijn
@@ -1117,17 +1132,14 @@ const MK = {
 };
 // ── verharding: tegelpad langs de gevel; betegeld terras van de carport tot aan het raam aan de eettafel; asfalt oost
 bx(-3.7, 17.0, -.06, 0, -2.0, -.3, MK.tiles, { cast: false });
-bx(-3.7, 8.13, -.06, 0, -6.6, -2.0, MK.tiles, { cast: false });
+bx(-3.7, 9.9, -.06, 0, -6.6, -2.0, MK.tiles, { cast: false });
 bx(-3.7, 20.35, -.06, -.02, -.32, -.29, M.stone, { cast: false });                               // dorpelstrook tegen de gevel
 // ── grasperk met stalen boord (8 mm, 7 cm boven de tegels): vanaf het raam aan de eettafel naar het oosten
 // plantvak west (voor het keukenraam, met boompje, foto 3131/3142/3143) en oost (vanaf de terrasdeur); de picknickzone ertussen is betegeld
-const beds = [[1.1, 4.6, -6.6, -2.0], [4.6, 5.6, -6.6, -5.0], [8.13, 13.4, -6.6, -2.0], [13.4, 17.0, -3.9, -2.0]];
-for (const [x1, x2, z1, z2] of beds) {
-  bx(x1, x2, -.06, .03, z1, z2, M.soil, { cast: false });
-  const e = (a, b, c, d) => bx(a, b, -.06, .07, c, d, MK.steel, { cast: false });
-  e(x1, x2, z2 - .008, z2); if (x1 > 8 && x1 < 9) e(x1, x1 + .008, z1, z2); if (x2 > 16.9 || x2 < 6) e(x2 - .008, x2, z1, z2);
-}
-addCol(8.13, 13.4, -6.6, -2.05); addCol(13.4, 17.0, -3.9, -2.05); addCol(1.1, 4.6, -6.6, -2.05); addCol(4.6, 5.6, -6.6, -5.05);
+const beds = [[1.1, 4.6, -6.6, -2.0], [4.6, 9.9, -6.6, -5.0], [9.9, 13.4, -6.6, -2.0], [13.4, 17.0, -3.9, -2.0]];
+for (const [x1, x2, z1, z2] of beds) { bx(x1, x2, -.06, .03, z1, z2, M.soil, { cast: false }); addCol(x1, x2, z1, z2 - .05); }
+{ const E = (a, b, c, d) => bx(a, b, -.06, .07, c, d, MK.steel, { cast: false });   // stalen boord waar het plantvak aan de tegels grenst
+  E(1.1, 4.6, -2.008, -2.0); E(4.592, 4.6, -5.0, -2.0); E(4.6, 9.9, -5.008, -5.0); E(9.9, 9.908, -5.0, -2.0); E(9.9, 17.0, -2.008, -2.0); E(16.992, 17.0, -3.9, -2.0); }
 // ── beplanting: grassen (Carex/Luzula-achtig), varens, meerstammige struikjes; instanced voor snelheid
 {
   const blade = (h, lean) => { const g = new THREE.PlaneGeometry(.016, h, 1, 3); g.translate(0, h / 2, 0); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const t = p.getY(i) / h; p.setZ(i, t * t * lean); p.setX(i, p.getX(i) * (1 - t * .8)); } g.computeVertexNormals(); return g; };
@@ -1142,7 +1154,7 @@ addCol(8.13, 13.4, -6.6, -2.05); addCol(13.4, 17.0, -3.9, -2.05); addCol(1.1, 4.
   });
   // varens langs de randen
   for (let i = 0; i < 26; i++) {
-    const g = grp(); const x = pick([1.4 + rnd() * 3.0, 8.4 + rnd() * 4.8, 13.6 + rnd() * 3.2]), z = x > 13.4 ? -3.6 + rnd() * 1.4 : -6.3 + rnd() * 4.1; if (!inBed(x, z)) continue;
+    const g = grp(); const x = pick([1.4 + rnd() * 3.0, 5.0 + rnd() * 4.6, 10.2 + rnd() * 3.0, 13.6 + rnd() * 3.2]), z = x > 13.4 ? -3.6 + rnd() * 1.4 : x > 4.6 && x < 9.9 ? -6.3 + rnd() * 1.1 : -6.3 + rnd() * 4.1; if (!inBed(x, z)) continue;
     for (let k = 0; k < 7; k++) { const len = .32 + rnd() * .2, m = mk(leafGeo(len, .2, .5, .02, 6, 2), PLM.fern, g); m.rotation.set(-.5, k / 7 * 6.283 + rnd() * .4, 0, 'YXZ'); }
     DET = true; place(g, x, .02, z); DET = false;
   }
@@ -1160,8 +1172,8 @@ addCol(8.13, 13.4, -6.6, -2.05); addCol(13.4, 17.0, -3.9, -2.05); addCol(1.1, 4.
   DET = true; place(shrub(2.1), 3.55, .02, -4.3); DET = false;
 }
 // ── picknicktafel (wit, gelatte bladen, V-poten) in de inham
-place(picnic(), 6.75, 0, -3.5, 0, { col: true });
-for (const x of [6.3, 7.2]) { addSeat({ kind: 'bank', x, z: -4.14, yaw: Math.PI, h: .47 }); addSeat({ kind: 'bank', x, z: -2.86, yaw: 0, h: .47 }); }
+place(picnic(), 7.25, 0, -3.5, 0, { col: true });
+for (const x of [6.8, 7.7]) { addSeat({ kind: 'bank', x, z: -4.14, yaw: Math.PI, h: .47 }); addSeat({ kind: 'bank', x, z: -2.86, yaw: 0, h: .47 }); }
 // ── luifel: witte onderzijde, dakrand met goot, regenpijpen, gevellampjes, buitenstopcontact
 bx(-3.7, 20.35, H + .3, H + .5, -2.0, -.3, MK.plaster); bx(-3.7, 20.35, H + .5, H + .62, -2.0, -.3, M.concrete);
 bx(-3.7, 20.35, H + .22, H + .62, -2.06, -2.0, MK.white);
@@ -1187,26 +1199,29 @@ for (let i = 1; i < 5; i++) { const z = -1.96 - i * (4.6 / 5); bx(-3.66, CPX, 2.
 bx(-3.66, CPX, 2.74, 2.75, -6.56, -1.96, M.polycarb, { cast: false });
 bx(CPX - .03, CPX + .03, 0, 2.55, -6.6, -2.6, MK.fence, { col: true });                                                    // lattenwand rechts (oost), doorgang aan het pad
 for (let z = -6.5; z < -2.6; z += 1.3) bx(CPX - .05, CPX + .05, 0, 2.6, z - .03, z + .03, MK.steel);
-// ── oost: plantstrook tegen de muur in bekistingsbeton; het pad loopt licht naar beneden naar een garagepoort onder het buurgebouw;
-//    noord van de betonmuur loopt een steilere helling naar de ondergrondse garage
-const PAR = 1.05, GX = 23.6, GDROP = .45;
+// ── oost: plantstrook tegen een muur in bekistingsbeton. Je komt binnen via de dubbele garagepoort onder het buurgebouw;
+//    links loopt het pad licht omhoog naar de koer, rechts daalt de helling naar de ondergrondse garage onder de koer (foto's 3145, 3146)
+const PAR = 1.05, GX = 21.0, GATE = 26.5, GDROP = .45, RB = 15.6, RD = 2.6;
 const slopeY = x => -GDROP * Math.min(1, Math.max(0, (x - 17.0) / (GX - 17.0)));
+const rampY = x => x >= GX ? -GDROP : x <= RB ? -RD : -RD + (RD - GDROP) * (x - RB) / (GX - RB);
 { const L = GX - 17.0, ang = Math.atan2(GDROP, L); const r0 = mk(new THREE.BoxGeometry(Math.hypot(L, GDROP), .1, 3.6), MK.asphaltOld); r0.position.set((17.0 + GX) / 2, -GDROP / 2 - .05, -2.1); r0.rotation.z = -ang; r0.updateMatrixWorld(); statics.push(r0); }
-bx(13.4, GX, -GDROP, PAR, -4.2, -3.9, M.board, { col: true }); bx(13.38, GX, PAR, PAR + .04, -4.22, -3.88, M.concrete);
-bx(13.4, 13.7, 0, PAR, -6.9, -4.2, M.board, { col: true });
-{ const x0 = 13.7, x1 = 26.5, drop = 2.6, L = x1 - x0, ang = Math.atan2(drop, L); const r = mk(new THREE.BoxGeometry(Math.hypot(L, drop), .15, 2.7), MK.asphaltOld); r.position.set((x0 + x1) / 2, -drop / 2 - .075, -5.55); r.rotation.z = -ang; r.updateMatrixWorld(); statics.push(r); }
-bx(13.7, 26.5, -2.8, -2.6, -6.9, -4.2, M.concrete, { cast: false });
-bx(13.7, 26.5, -2.6, PAR, -6.95, -6.9, M.board);
-// buurgebouw oost: rode baksteen boven; op het gelijkvloers de garage-ingang met kolom, betonbalk en witte sectionaalpoort
-bx(20.35, 20.65, PAR, 4.2, -6.9, -4.2, M.brickRed);
+bx(GX, GATE, -GDROP - .1, -GDROP, -6.9, -.3, MK.asphaltOld, { cast: false });                                             // vlak stuk achter de poort
+{ const L = GX - RB, drop = RD - GDROP, ang = Math.atan2(drop, L); const r = mk(new THREE.BoxGeometry(Math.hypot(L, drop), .15, 2.7), MK.asphaltOld); r.position.set((RB + GX) / 2, -(RD + GDROP) / 2 - .075, -5.55); r.rotation.z = ang; r.updateMatrixWorld(); statics.push(r); }
+bx(13.7, RB + .05, -RD - .15, -RD, -6.9, -4.2, MK.asphaltOld, { cast: false });                                            // onderaan de helling
+bx(13.4, GX, -RD, PAR, -4.2, -3.9, M.board, { col: true }); bx(13.38, GX, PAR, PAR + .04, -4.22, -3.88, M.concrete);       // borstwering tussen pad en helling
+bx(13.4, 13.7, -RD, PAR, -6.9, -4.2, M.board, { col: true }); bx(13.38, 13.72, PAR, PAR + .04, -6.9, -4.2, M.concrete);     // kopmuur onder de koer
+bx(13.7, 13.76, -RD, -RD + 2.2, -6.75, -4.35, MK.garage); bx(13.7, 13.78, -RD + 2.2, -RD + 2.28, -6.8, -4.3, M.alu);        // witte sectionaalpoort van de ondergrondse garage
+bx(13.7, GATE, -RD, PAR, -6.95, -6.9, M.board);                                                                            // zijwand van de helling
 { const g = grp(); lb(g, -.3, .3, 0, .06, 0, .06, M.chrome); for (let i = 0; i < 3; i++) lb(g, -.28 + i * .25, -.25 + i * .25, -.12, 0, .02, .05, M.chrome); place(g, 14.6, 2.25, -6.9, 0); }   // wandarmatuur (foto 3150)
-bx(20.65, 32, 2.6, 3.2, -6.9, -.3, M.concrete); bx(20.65, 32, 3.2, 12, -6.9, -.3, M.brickRed);
-bx(20.65, 21.05, -GDROP, 2.6, -4.25, -3.85, M.concrete, { col: true });                                                   // kolom tussen de twee ingangen
-bx(23.3, 23.7, -2.6, 2.6, -6.9, -6.5, M.concrete);
-bx(GX, GX + .05, -GDROP, 2.2, -3.85, -.3, MK.garage, { col: true }); bx(GX, GX + .05, 2.2, 2.6, -3.85, -.3, M.concrete);   // witte sectionaalpoort
-bx(GX - 2.9, GX + .1, -GDROP - .05, -GDROP, -3.85, -.3, MK.asphaltOld, { cast: false });
-bx(20.65, GX, -GDROP, 2.6, -.3, 0, M.brickRed, { col: true });
-bx(26.5, 26.55, -2.6, 2.6, -6.9, -4.2, M.blackSoft);                                                                      // donkere ondergrondse garage
+// buurgebouw oost boven de doorgang: betonbalk, rode baksteen; kolom op de splitsing; zijmuren
+bx(20.65, GATE + .3, 2.6, 3.2, -6.9, -.3, M.concrete); bx(20.65, 32, 3.2, 12, -6.9, -.3, M.brickRed);
+bx(20.65, 21.05, -GDROP, 2.6, -4.25, -3.85, M.concrete, { col: true });
+bx(20.35, GATE, -GDROP, 2.6, -7.25, -6.9, M.brickRed, { col: true });
+bx(20.65, GATE, -GDROP, 2.6, -.3, 0, M.brickRed, { col: true });
+// dubbele garagepoort (twee witte sectionaalpoorten naast elkaar)
+bx(GATE, GATE + .06, -GDROP, -GDROP + 2.5, -6.85, -.35, MK.garage, { col: true }); bx(GATE - .03, GATE, -GDROP, -GDROP + 2.5, -3.63, -3.57, M.alu);
+bx(GATE - .05, GATE + .1, -GDROP + 2.5, 2.6, -6.9, -.3, M.concrete);
+bx(GATE - .04, GATE, -GDROP, -GDROP + 2.5, -6.9, -6.85, M.alu); bx(GATE - .04, GATE, -GDROP, -GDROP + 2.5, -.35, -.3, M.alu);
 // ── schutting: zwarte verticale latten op stalen palen, 3,1 m hoog (vult het keukenraam volledig, foto 3131)
 bx(1.07, 13.4, 0, 3.1, -6.92, -6.86, MK.fence, { col: true });
 // achter de garagehelling: rode bakstenen muur van het buurgebouw met muurkap en wandarmatuur (zichtbaar door het raam van Bureau Stijn, foto 3150)
@@ -1217,13 +1232,6 @@ bx(1.07, 20.35, 2.6, 2.64, -6.98, -6.84, MK.steel);
 bx(-8, 26, -.05, 0, -14, -6.98, M.soil, { cast: false });
 bx(1.5, 9.5, 0, 3.4, -10.5, -7.6, M.brickRed); { const rf = mk(new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-1.6, 0), new THREE.Vector2(1.6, 0), new THREE.Vector2(0, 1.0)]), { depth: 8.2, bevelEnabled: false }), M.slat); rf.rotation.y = Math.PI / 2; rf.position.set(1.4, 3.4, -9.05); rf.updateMatrixWorld(); statics.push(rf); }
 bx(9.6, 18.5, 0, 4.4, -12, -7.6, M.brickRed); bx(9.6, 18.5, 4.4, 4.8, -8.2, -7.6, MK.fence);
-bx(-8, 28, 0, 13.5, -24, -14, M.render);
-for (let f = 0; f < 3; f++) { const y = 3.6 + f * 3.0;
-  bx(-7, 27, y, y + .18, -14, -12.4, MK.white); for (let x = -7; x <= 27; x += .9) bx(x - .01, x + .01, y + .18, y + 1.15, -12.42, -12.38, M.steel);
-  bx(-7, 27, y + 1.1, y + 1.15, -12.44, -12.36, M.alu); bx(-7, 27, y + .18, y + 1.1, -12.41, -12.39, M.glass, { cast: false });
-  for (let x = -6.5; x < 26; x += 3.4) { bx(x, x + 2.4, y + .25, y + 2.55, -14.02, -14.0, M.darkGlass, { cast: false }); bx(x - .03, x + 2.43, y + .22, y + .25, -14.04, -13.98, M.alu); }
-  for (let x = -5; x < 26; x += 6.8) { const g = grp(); lb(g, -.3, .3, 0, .45, -.25, .25, MK.white); lb(g, -.3, .3, .45, .8, .18, .25, MK.white); place(g, x, y + .18, -13.3); }
-}
 bx(-16, -4.0, 0, 9.5, -7, 5.61, M.brickRed); bx(20.65, 60, -1.6, 10, 0, 5.61, M.brickRed);
 bx(20.05, 20.65, 0, H + .3, -.3, 4.85, M.brickRed, { col: true });
 
@@ -1232,13 +1240,22 @@ bx(-60, 60, STREET - .05, STREET, HD + .3, 21.0, M.setts, { cast: false });
 bx(-60, 60, STREET, STREET + .004, 17.1, 17.4, M.stone, { cast: false });
 // bovenverdiepingen boven het bureau (tan baksteen straatkant, rood achterkant)
 bx(-.3, 16.0, H + .3, 9.6, 6.5, HD + .3, M.brickTan); bx(-.3, 16.0, H + .3, 9.6, -.3, 6.5, M.brickRed);
-bx(-.4, 16.1, 9.6, 9.85, -.4, HD + .4, M.stoneLight);
+bx(-.4, 16.1, 9.6, 9.85, -2.06, HD + .4, M.stoneLight);
 bx(-.3, 16.0, H + .55, H + .7, HD + .3, HD + .38, M.stoneLight);                    // cordonband
 for (const [a, b] of streetWin.concat([[7.2, 8.5]])) for (const y of [4.3, 7.1]) {
   const w = b - a; bx(a + .05, b - .05, y, y + 1.9, HD + .3, HD + .315, M.darkGlass, { cast: false }); bx(a, b, y - .06, y, HD + .3, HD + .37, M.stoneLight);
   if (y > 6) { bx(a - .26, a - .04, y, y + 1.9, HD + .3, HD + .33, M.grey); bx(b + .04, b + .26, y, y + 1.9, HD + .3, HD + .33, M.grey); } if (w > 1.2) bx(a + .05, b - .05, y + .8, y + .83, HD + .315, HD + .33, M.alu);
 }
-for (const a of [1, 4, 7, 10, 13]) for (const y of [4.4, 7.2]) bx(a, a + 1.4, y, y + 1.8, -.32, -.3, M.darkGlass, { cast: false });
+{ const FL = [H + .62, 6.6], WX = [-.3, 3.75, 7.85, 11.95, 16.0];
+  bx(-.3, 16.0, 6.3, 6.6, -2.06, -.3, M.concrete); bx(-.3, 16.0, 6.25, 6.6, -2.12, -2.06, MK.white);                        // vloerplaat tweede verdieping
+  for (const x of WX) bx(x - .1, x + .1, H + .3, 9.6, -2.0, -.3, M.brickRed);                                              // tussenmuren tussen de terrassen
+  for (const y of FL) for (let i = 0; i < WX.length - 1; i++) {
+    const a = WX[i] + .1, b = WX[i + 1] - .1;
+    bx(a, b, y, y + .06, -2.04, -1.98, MK.pipe); bx(a, b, y + 1.0, y + 1.05, -2.05, -1.97, MK.pipe);                       // balustrade: onder- en handregel
+    for (let x = a + .12; x < b - .05; x += .13) bx(x - .009, x + .009, y + .06, y + 1.0, -2.02, -2.0, MK.pipe);
+    const m = (a + b) / 2; bx(a + .3, b - .3, y, y + 2.3, -.33, -.3, M.darkGlass, { cast: false });                          // schuiframen naar het terras
+    for (const x of [a + .3, m, b - .3]) bx(x - .03, x + .03, y, y + 2.3, -.36, -.3, MK.pipe); bx(a + .3, b - .3, y + 2.3, y + 2.36, -.36, -.3, MK.pipe);
+  } }
 // huisnummer
 { const t = ctex(128, 128, (g, w, h) => { g.fillStyle = '#c9a184'; g.fillRect(0, 0, w, h); g.fillStyle = '#1c1d1f'; g.font = 'bold 92px Archivo, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('2', w / 2, h / 2 + 4); }, 1);
   plane(.16, .16, new THREE.MeshBasicMaterial({ map: t }), 8.75, 1.9, HD + .305, 0); bx(8.68, 8.72, 1.0, 1.35, HD + .3, HD + .33, M.chrome); }
@@ -1516,9 +1533,9 @@ const zoneAt = (x, z) => zones.find(q => x >= q[2] && x < q[3] && z >= q[4] && z
 // ───────────────────────── player & input
 const P = { x: 7.85, z: 16.2, yaw: 0, pitch: -.02, y: STREET };
 function groundAt(x, z) {
-  if (z < -.3 && z > -3.9 && x > 17.0) return slopeY(x);
+  if (z < -.3 && z > -6.9 && x > 13.7) { if (x >= GX) return -GDROP; if (z < -4.05) return rampY(x); if (x > 17.0) return slopeY(x); }
   if (z <= HD + .3) return 0;
-  if (x > 7.2 && x < 8.5) { if (z < HD + .15) return 0; if (z < HD + .3) return STREET + .2; }
+  if (x > 7.0 && x < 8.7 && z < HD + .62) return STREET + .2;
   return STREET;
 }
 const keys = new Set(); let locked = false, dragLook = false, started = false, mapBig = false;
@@ -2716,7 +2733,7 @@ const NIGHT = (() => {
   // lampen hier en daar (modeleenheden): kleur, sterkte, gedrag
   const SPOTS_L = [
     [3.1, 2.3, '#cfe3ff', 5, 'flikker'], [14.7, 2.3, '#ff2414', 4, 'puls'], [8.0, 11.6, '#ff2a18', 4, 'puls'], [13.4, 8.8, '#d6ecff', 4, 'flikker'],
-    [2.4, 8.8, '#74ff9a', 2.2, 'rustig'], [8.0, 7.3, '#ff8a3a', 3, 'kaars'], [10.0, -3.6, '#ffae55', 7, 'flikker'], [18.6, -4.2, '#ff2a18', 4, 'puls'], [8.0, 18.5, '#ffa040', 9, 'rustig'],
+    [2.4, 8.8, '#74ff9a', 2.2, 'rustig'], [8.0, 7.3, '#ff8a3a', 3, 'kaars'], [10.0, -3.6, '#ffae55', 7, 'flikker'], [19.2, -2.6, '#ff2a18', 4, 'puls'], [8.0, 18.5, '#ffa040', 9, 'rustig'],
   ];
   const torch = new THREE.SpotLight('#ffe2bd', 0, 24, .44, .7, 1.25); torch.position.set(.18, -.12, .05); const tt = new THREE.Object3D(); tt.position.set(.05, -.1, -6); torch.target = tt;
   // drone + gekreun
@@ -2781,9 +2798,9 @@ const NIGHT = (() => {
 })();
 const ZB = (() => {
   const Z = { active: false, list: [], wave: 0, toSpawn: 0, spawnT: 0, score: 0, kills: 0, hp: 100, ammo: 12, mag: 12, reloadT: 0, fireT: 0, firing: false, gun: 'pistool', hurtT: 0, between: 0, gridT: 0, hud: null, prevThird: true };
-  const SPAWNS = [[7.85, 15.6], [.66, -1.1], [9.1, -1.2], [16.3, -1.2], [20.5, -2.2]];
+  const SPAWNS = [[7.85, 15.6], [.66, -1.1], [9.1, -1.2], [16.3, -1.2], [25.6, -3.5], [14.3, -5.5]];
   // ── looprooster: vrije cellen van 25 cm; afstandsveld vanaf de speler (breadth-first), zombies volgen de daling
-  const G = { x0: -4, z0: -7.2, s: .25, w: 104, h: 114 }; G.block = new Uint8Array(G.w * G.h); G.dist = new Float32Array(G.w * G.h);
+  const G = { x0: -4, z0: -7.2, s: .25, w: 124, h: 114 }; G.block = new Uint8Array(G.w * G.h); G.dist = new Float32Array(G.w * G.h);
   function buildGrid() {
     G.block.fill(0); const pad = .18;
     for (const c of colliders) { if (c.on) continue; const i0 = Math.max(0, Math.floor((c.x1 - pad - G.x0) / G.s)), i1 = Math.min(G.w - 1, Math.floor((c.x2 + pad - G.x0) / G.s)), j0 = Math.max(0, Math.floor((c.z1 - pad - G.z0) / G.s)), j1 = Math.min(G.h - 1, Math.floor((c.z2 + pad - G.z0) / G.s)); for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) G.block[j * G.w + i] = 1; }
@@ -2940,7 +2957,7 @@ const ZB = (() => {
     Z.hurtT -= dt; const hurt = Z.hud && Z.hud.querySelector('.hurt'); if (hurt) hurt.style.opacity = Math.max(0, Z.hurtT * 2.5) + (Z.hp < 30 ? .25 : 0);
     if (Z.hp <= 0) stop(true);
   }
-  SPOTS.push({ x: 21.6, z: -2.0, tx: 23.6, tz: -2.0, r: 1.8, label: 'zombie-aanval starten (garagepoort)', act: start });
+  SPOTS.push({ x: 24.9, z: -2.0, tx: 26.5, tz: -2.0, r: 1.8, label: 'zombie-aanval starten (garagepoort)', act: start });
   return { Z, update, start, stop, get active() { return Z.active; } };
 })();
 frame();
