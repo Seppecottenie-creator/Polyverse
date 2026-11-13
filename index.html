@@ -2622,15 +2622,17 @@ const WPN = (() => {
   const W = { scene: sc, cur: null, ready: false, list: {} };
   const defs = {
     pistool: { url: 'models/wapen_pistool.gltf.json', idle: 'Idle', fire: 'Shoot', reload: 'Reload', draw: 'Draw', eye: [.02, 1.56, -.38] },
-    geweer: { url: 'models/wapen_geweer.gltf.json', idle: 'Idle', fire: 'Fire', reload: 'Reload', draw: 'Draw', cam: 'FPS_Camera' }
+    geweer: { url: 'models/wapen_geweer.gltf.json', idle: 'Idle', fire: 'Fire', reload: 'Reload', draw: 'Draw', cam: 'FPS_Camera' },
+    kriss: { url: 'models/wapen_kriss.gltf.json', idle: '__idle', fire: 'Shoot', reload: 'Reload', draw: 'Draw', eye: [1, 150, -28], flip: false }
   };
   const ry90 = new THREE.Matrix4().makeRotationY(-Math.PI / 2), ryPi = new THREE.Matrix4().makeRotationY(Math.PI), _m = new THREE.Matrix4(), _r = new THREE.Matrix4();
   W.load = () => W.loading || (W.loading = Promise.all(Object.entries(defs).map(async ([k, d]) => {
-    const g = await fetchGltfMulti(d.url); const holder = new THREE.Group(); holder.matrixAutoUpdate = false; holder.add(g.scene); holder.visible = false; sc.add(holder);
+    const g = await fetchGltfMulti(d.url, d.flip !== false); const holder = new THREE.Group(); holder.matrixAutoUpdate = false; holder.add(g.scene); holder.visible = false; sc.add(holder);
     g.scene.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false; for (const m of [].concat(o.material)) m.envMapIntensity = .7; } });
     const mx = new THREE.AnimationMixer(g.scene), A = {}; for (const c of g.animations) A[c.name] = mx.clipAction(c);
     for (const n of [d.fire, d.reload, d.draw]) if (A[n]) { A[n].setLoop(THREE.LoopOnce, 1); A[n].clampWhenFinished = true; }
-    if (A[d.idle]) A[d.idle].play();
+    if (!A[d.idle] && d.idle === '__idle') { const dc = g.animations.find(a => a.name === d.draw); if (dc) { const c = dc.clone(); c.name = '__idle'; const a = mx.clipAction(c); a.play(); a.time = c.duration - .001; a.timeScale = 0; A.__idle = a; } }   // geen rustanimatie: eindpose van Draw
+    else if (A[d.idle]) A[d.idle].play();
     W.list[k] = { d, g, holder, mx, A, cam: d.cam ? g.scene.getObjectByName(d.cam) : null, once: null };
   })).then(() => { W.ready = true; }).catch(e => { console.warn('wapens niet geladen', e); }));
   W.show = k => { for (const [n, w] of Object.entries(W.list)) w.holder.visible = n === k; W.cur = W.list[k] || null; if (W.cur) W.play('draw', 1.3); };
@@ -2927,12 +2929,14 @@ const ZB = (() => {
   function zaim(b, c, dir) { b.getWorldPosition(_a); c.getWorldPosition(_b); _b.sub(_a).normalize(); _q.setFromUnitVectors(_b, dir.clone().normalize()); b.getWorldQuaternion(_q2); b.parent.getWorldQuaternion(_q3).invert(); b.quaternion.copy(_q3.multiply(_q.multiply(_q2))); b.updateMatrixWorld(true); }
   function tint(z) { const m = z.model || (z.fb && z.fb.userData.model); if (!m || z.tinted) return; z.tinted = true; const col = new THREE.Color(z.real ? '#ffffff' : ZTINT[Math.random() * 3 | 0]); m.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.color.multiply(col); o.material.emissive = new THREE.Color(z.real ? '#000000' : '#0d1a08'); z.mat = z.mat || []; z.mat.push(o.material); } }); }
   // ── wapens, munten en winkel
-  const GUNS = { pistool: { name: 'Pistool', mag: 12, rate: .2, auto: false }, geweer: { name: 'Geweer (M4)', mag: 30, rate: .11, auto: true }, knuppel: { name: 'Honkbalknuppel', mag: 0, rate: .62, melee: true } };
+  const GUNS = { pistool: { name: 'Pistool', mag: 12, rate: .2, auto: false }, geweer: { name: 'Geweer (M4)', mag: 30, rate: .11, auto: true }, kriss: { name: 'Kriss Vector', mag: 25, rate: .07, auto: true }, knuppel: { name: 'Honkbalknuppel', mag: 0, rate: .62, melee: true } };
   const SHOP = { x: 4.62, z: 2.1 };   // voor het keukeneiland
   const ITEMS = [
     { k: 'geweer', name: 'Geweer (M4)', desc: 'automatisch · 30 kogels per lader + 60 reserve', price: 300 },
     { k: 'kogels', name: 'Geweerkogels', desc: '+30 kogels voor het geweer', price: 40 },
     { k: 'pkogels', name: 'Pistoolkogels', desc: '+24 kogels voor het pistool', price: 20 },
+    { k: 'kriss', name: 'Kriss Vector', desc: 'heel snel automatisch · 25 kogels per lader + 50 reserve', price: 450 },
+    { k: 'kkogels', name: 'Kriss-kogels', desc: '+25 kogels voor de Kriss Vector', price: 35 },
     { k: 'flash', name: 'Flashbang', desc: 'verdooft zombies in de buurt 4 s · gooien met G', price: 60 },
     { k: 'med', name: 'Verbandkit', desc: '+50 gezondheid · gebruiken met H', price: 50 },
   ];
@@ -2986,7 +2990,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
 <div class="top">ZOMBIES <b id="zl">0</b> &nbsp;·&nbsp; SCORE <span id="zs">0</span></div>
 <div class="round"><small>GOLF</small><span id="zw">1</span></div><div class="hpw"><i id="zh" style="width:100%"></i></div>
 <div class="pts" id="zpts"><small>MUNTEN</small><b id="zc">0</b></div>
-<div class="ammo"><div class="wn" id="zg">Pistool</div><b id="za">12</b><span class="res" id="zr2"> | 24</span><div class="inv" id="zi"></div><div class="keys">1 pistool · 2 geweer · 3 knuppel · R herladen · Backspace stoppen</div></div>
+<div class="ammo"><div class="wn" id="zg">Pistool</div><b id="za">12</b><span class="res" id="zr2"> | 24</span><div class="inv" id="zi"></div><div class="keys">1 pistool · 2 geweer · 3 knuppel · 4 kriss · R herladen · Backspace stoppen</div></div>
 <div class="hint" id="zhint"><b>E</b>winkel in de keuken</div><div class="msg" id="zm"></div>`;
     document.body.appendChild(h); return h;
   }
@@ -3007,7 +3011,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   function menu() {
     const m = document.createElement('div'); m.id = 'zmenu'; m.innerHTML = `<div class="zc"><h1>Zombie-aanval</h1>
 <p>Het is nacht op kantoor. Zombies kruipen naar binnen door de voordeur, de garagepoort, de ondergrondse garage en door gaten in de carport, het wc, de technische ruimte en het middenblok. Overleef zo veel mogelijk golven.</p>
-<div class="grid"><div><h3>Bediening</h3><ul><li><kbd>WASD</kbd>lopen · <kbd>Shift</kbd>sneller</li><li><kbd>klik</kbd>schieten (ingedrukt houden met het geweer)</li><li><kbd>R</kbd>herladen · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>pistool / geweer / knuppel</li><li><kbd>G</kbd>flashbang gooien · <kbd>H</kbd>verband</li><li><kbd>Backspace</kbd>stoppen</li></ul></div>
+<div class="grid"><div><h3>Bediening</h3><ul><li><kbd>WASD</kbd>lopen · <kbd>Shift</kbd>sneller</li><li><kbd>klik</kbd>schieten (ingedrukt houden met het geweer)</li><li><kbd>R</kbd>herladen · <kbd>1</kbd>–<kbd>4</kbd>pistool / geweer / knuppel / Kriss</li><li><kbd>G</kbd>flashbang gooien · <kbd>H</kbd>verband</li><li><kbd>Backspace</kbd>stoppen</li></ul></div>
 <div><h3>Munten en winkel</h3><ul><li>Elke zombie: <b>10 munten</b>, hoofdschot +5</li><li>Elke nieuwe golf: bonus</li><li>Winkel aan het <b>keukeneiland</b> (<kbd>E</kbd>)</li><li>Kogels zijn beperkt: koop bij, of gebruik de knuppel</li><li>Het spel pauzeert terwijl je winkelt</li></ul></div></div>
 <div class="load"><i id="zml"></i></div><div class="row"><span class="st" id="zms">laden…</span><button id="zmb" disabled>Start</button></div></div>`;
     document.body.appendChild(m); return m;
@@ -3030,18 +3034,18 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     await new Promise(r => setTimeout(r, 60)); tmp.forEach(m => scene.remove(m)); bar(100); st('klaar');
   }
   // ── winkel
-  function canBuy(it) { if (Z.coins < it.price) return false; if (it.k === 'geweer') return !Z.inv.geweer.owned; if (it.k === 'kogels') return Z.inv.geweer.owned; return true; }
+  function canBuy(it) { if (Z.coins < it.price) return false; if (it.k === 'geweer') return !Z.inv.geweer.owned; if (it.k === 'kogels') return Z.inv.geweer.owned; if (it.k === 'kriss') return !Z.inv.kriss.owned; if (it.k === 'kkogels') return Z.inv.kriss.owned; return true; }
   function buy(it) {
     if (!canBuy(it)) return; Z.coins -= it.price; sfx(880, .08, 'triangle', .06); setTimeout(() => sfx(1320, .1, 'triangle', .05), 80);
     if (it.k === 'geweer') { Object.assign(Z.inv.geweer, { owned: true, ammo: 30, res: 60 }); switchGun('geweer'); }
-    if (it.k === 'kogels') Z.inv.geweer.res += 30; if (it.k === 'pkogels') Z.inv.pistool.res += 24;
+    if (it.k === 'kogels') Z.inv.geweer.res += 30; if (it.k === 'pkogels') Z.inv.pistool.res += 24; if (it.k === 'kriss') { Object.assign(Z.inv.kriss, { owned: true, ammo: 25, res: 50 }); switchGun('kriss'); } if (it.k === 'kkogels') Z.inv.kriss.res += 25;
     if (it.k === 'flash') Z.flash++; if (it.k === 'med') Z.med++;
     setHud(); renderShop();
   }
   function renderShop() {
     if (!Z.shop) return; const c = Z.shop.querySelector('.items'); c.innerHTML = '';
     Z.shop.querySelector('.coins').textContent = Z.coins + ' munten';
-    for (const it of ITEMS) { const b = document.createElement('button'); b.className = 'it'; b.disabled = !canBuy(it); b.innerHTML = `<b>${it.name}${it.k === 'geweer' && Z.inv.geweer.owned ? ' · in bezit' : ''}</b><span>${it.desc}</span><em>${it.price} munten</em>`; b.onclick = () => buy(it); c.appendChild(b); }
+    for (const it of ITEMS) { const b = document.createElement('button'); b.className = 'it'; b.disabled = !canBuy(it); b.innerHTML = `<b>${it.name}${(it.k === 'geweer' || it.k === 'kriss') && Z.inv[it.k].owned ? ' · in bezit' : ''}</b><span>${it.desc}</span><em>${it.price} munten</em>`; b.onclick = () => buy(it); c.appendChild(b); }
   }
   function openShop() {
     if (Z.shop) return; Z.paused = true; Z.firing = false; try { document.exitPointerLock(); } catch (e) { }
@@ -3051,7 +3055,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   function closeShop() { if (!Z.shop) return; Z.shop.remove(); Z.shop = null; Z.paused = false; tryLock(); }
   function switchGun(k) { if (!Z.inv[k].owned || Z.gun === k || Z.reloadT > 0) return; Z.gun = k; if (GUNS[k].melee) { WPN.hide(); bat.visible = true; } else { bat.visible = false; if (WPN.ready) WPN.show(k); } sfx(330, .05); setHud(); }
   function outOfAmmo() {
-    const alt = ['geweer', 'pistool'].find(k => k !== Z.gun && Z.inv[k].owned && (Z.inv[k].ammo > 0 || Z.inv[k].res > 0));
+    const alt = ['kriss', 'geweer', 'pistool'].find(k => k !== Z.gun && Z.inv[k].owned && (Z.inv[k].ammo > 0 || Z.inv[k].res > 0));
     if (alt) { switchGun(alt); say('Geen kogels', 'gewisseld naar ' + GUNS[alt].name.toLowerCase(), 1.6); } else { switchGun('knuppel'); say('Geen kogels', 'pak de knuppel · of koop kogels in de keuken', 2.2); }
   }
   // honkbalknuppel voor de camera (eigen model, slaat in een boog)
@@ -3071,7 +3075,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     if (Z.active) return; if (SIT.seat) return; P.yaw = Math.PI / 2; P.pitch = 0; Z.active = true; Z.phase = 'menu'; document.body.classList.add('zbmode'); Z.prevThird = third; third = false; buildGrid(); flow(); NIGHT.enable(); Z.groanT = 2;
     doors.forEach(d => { d.target = 1; });
     Object.assign(Z, { wave: 0, score: 0, kills: 0, coins: 0, hp: 100, gun: 'pistool', reloadT: 0, between: 1.5, toSpawn: 0, flash: 0, med: 0, paused: false, nades: [], boom: 0,
-      inv: { pistool: { owned: true, ammo: 12, res: 24 }, geweer: { owned: false, ammo: 0, res: 0 }, knuppel: { owned: true, ammo: Infinity, res: Infinity } } });
+      inv: { pistool: { owned: true, ammo: 12, res: 24 }, geweer: { owned: false, ammo: 0, res: 0 }, kriss: { owned: false, ammo: 0, res: 0 }, knuppel: { owned: true, ammo: Infinity, res: Infinity } } });
     rifle.forEach(m => m.visible = false); gun.visible = false;
     scene.add(sign, boomL); boomL.intensity = 0;
     Z.hud = hud(); document.getElementById('cross').style.display = 'none'; setHud();
@@ -3093,7 +3097,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   function shoot() {
     if (GUNS[Z.gun].melee) { swing(); return; }
     const w = inv(); if (Z.reloadT > 0) return; if (w.ammo <= 0) { if (w.res > 0) reload(); else outOfAmmo(); return; }
-    w.ammo--; Z.fireT = GUNS[Z.gun].rate; if (WPN.ready) WPN.play('fire', Z.gun === 'geweer' ? 1.4 : 1.1); flash.visible = true; flash.rotation.z = Math.random() * 3; Z.kick = 1; noise(.09, .16); sfx(160, .08, 'square', .05, -100);
+    w.ammo--; Z.fireT = GUNS[Z.gun].rate; if (WPN.ready) WPN.play('fire', Z.gun === 'geweer' ? 1.4 : Z.gun === 'kriss' ? 1.6 : 1.1); flash.visible = true; flash.rotation.z = Math.random() * 3; Z.kick = 1; noise(.09, .16); sfx(160, .08, 'square', .05, -100);
     const o = camera.getWorldPosition(new THREE.Vector3()), d = camera.getWorldDirection(new THREE.Vector3()); let best = null, bt = 1e9, head = false;
     for (const z of Z.list) {
       if (z.dead) continue; const cx = z.x * WS, cz = z.z * WS, r = .32 * (z.big ? 1.25 : 1), Hh = 1.95 * (z.big ? 1.25 : 1), gy = groundAt(z.x, z.z) * WS;
@@ -3129,7 +3133,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     if (Z.shop) { if (e.code === 'KeyE' || e.code === 'Escape') { e.preventDefault(); closeShop(); } return; }
     if (e.code === 'Backspace') { e.preventDefault(); stop(false); return; }
     if (Z.phase !== 'play') { if (e.code === 'Enter' && Z.menu && !Z.menu.querySelector('#zmb').disabled) Z.menu.querySelector('#zmb').click(); return; }
-    if (e.code === 'KeyR') reload(); if (e.code === 'Digit1') switchGun('pistool'); if (e.code === 'Digit2') switchGun('geweer'); if (e.code === 'Digit3') switchGun('knuppel');
+    if (e.code === 'KeyR') reload(); if (e.code === 'Digit1') switchGun('pistool'); if (e.code === 'Digit2') switchGun('geweer'); if (e.code === 'Digit3') switchGun('knuppel'); if (e.code === 'Digit4') switchGun('kriss');
     if (e.code === 'KeyG') throwFlash(); if (e.code === 'KeyH') useMed();
     if (e.code === 'KeyE' && Math.hypot(P.x - SHOP.x, P.z - SHOP.z) < 1.3) openShop();
   }, true);
@@ -3147,7 +3151,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     if (Z.phase !== 'play' || Z.paused) return;
     Z.groanT -= dt;
     if (Z.groanT <= 0) { Z.groanT = 1.2 + Math.random() * 2.5; let best = null, bd = 14; for (const z of Z.list) { if (z.dead) continue; const dd = Math.hypot(z.x - P.x, z.z - P.z); if (dd < bd && Math.random() < .6) { bd = dd; best = z; } } if (best) NIGHT.groan(.07 * (1 - bd / 14) + .01); }
-    Z.fireT -= dt; if (Z.firing && (Z.gun === 'geweer' || Z.gun === 'knuppel') && Z.fireT <= 0) shoot();
+    Z.fireT -= dt; if (Z.firing && (GUNS[Z.gun].auto || GUNS[Z.gun].melee) && Z.fireT <= 0) shoot();
     if (Z.swing > 0) { Z.swing -= dt; if (!Z.swHit && Z.swing < .26) { Z.swHit = true; batHit(); } }
     { const u = Z.swing > 0 ? Math.sin((1 - Z.swing / .42) * Math.PI) : 0; bat.position.set(.3 - u * .42, -.34 + u * .06 + Math.sin(performance.now() / 300) * .004 * Math.min(1, mySpeed), -.46); bat.rotation.set(-.35 - u * .7, -.1 + u * .5, .55 + u * 1.25); }
     if (Z.reloadT > 0) { Z.reloadT -= dt; if (Z.reloadT <= 0) finishReload(); }
