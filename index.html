@@ -1545,7 +1545,7 @@ addEventListener('keydown', e => { if (GM.active) { if (e.code === 'Escape') clo
 addEventListener('keyup', e => { if (GM.active) { if (GM.active.key) GM.active.key(e, false); return; } keys.delete(e.code); });
 addEventListener('blur', () => keys.clear());
 const cvs = renderer.domElement;
-document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === cvs; if (!locked && started && !dragLook && !GM.active) showOverlay(true); });
+document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === cvs; if (!locked && started && !dragLook && !GM.active && !(typeof ZB !== 'undefined' && ZB.active && (ZB.Z.menu || ZB.Z.shop))) showOverlay(true); });
 let mouseDown = false;
 document.addEventListener('mousemove', e => { if (locked || (dragLook && mouseDown)) look(e.movementX, e.movementY); });
 cvs.addEventListener('mousedown', () => { mouseDown = true; if (started && !locked && !dragLook && !isTouch && !(typeof GM !== 'undefined' && GM.active)) tryLock(); }); addEventListener('mouseup', () => mouseDown = false);
@@ -2668,7 +2668,7 @@ function retargetZombie(base, clips) {   // per figuur één keer: q' = D(ouder)
   const W = base.userData.bindW, R = ZREST.q, D = {}, I = new THREE.Quaternion(), q = new THREE.Quaternion();
   for (const n in W) if (R[n]) D[n] = new THREE.Quaternion().fromArray(R[n]).invert().multiply(W[n]);
   const parentOf = {}; base.traverse(b => { if (b.isBone) parentOf[b.name] = b.parent && b.parent.isBone ? b.parent.name : null; });
-  const hipsScale = base.userData.hipsY / ZREST.hipsY, out = {};
+  const hb = base.getObjectByName('mixamorigHips'), hipsScale = (hb ? hb.position.y : 100) / ZREST.hipsY, out = {};   // heupbeweging: meter (FBX) → eigen eenheden van het skelet (cm)
   for (const [k, c] of Object.entries(clips)) {
     const cc = c.clone();
     for (const t of cc.tracks) {
@@ -2685,22 +2685,15 @@ function retargetZombie(base, clips) {   // per figuur één keer: q' = D(ouder)
 // ── nacht voor de zombie-aanval: maan, mist, zaklamp, flikkerende lampen, spleten in de muren en enge geluiden
 const NIGHT = (() => {
   const N = { on: false, saved: null, lights: [], t: 0 };
-  // spleten: elke lange muur krijgt om de ±3 m een gat waar zombies door kruipen (de speler niet)
-  const BREACH = [], RECTS = [...mapWalls, ...mapGlass];
-  const walls = RECTS.map(([a, b, c, d]) => ({ a, b, c, d, alongX: (b - a) >= (d - c) })).map(w => Object.assign(w, { len: w.alongX ? w.b - w.a : w.d - w.c, th: w.alongX ? w.d - w.c : w.b - w.a })).filter(w => w.th <= .45 && w.len >= 1.2).sort((p, q) => q.len - p.len);
-  for (const w of walls) {
-    const n = Math.max(1, Math.round(w.len / 2.6));
-    for (let k = 0; k < n; k++) {
-      const u = (w.alongX ? w.a : w.c) + (k + .5) * w.len / n; let lo = w.alongX ? w.c : w.a, hi = w.alongX ? w.d : w.b;
-      // hele muurpakket meenemen: aanliggende lagen (bekleding, glas) op dezelfde plaats
-      for (let it = 0; it < 3; it++) for (const [a, b, c, d] of RECTS) { const ua = w.alongX ? a : c, ub = w.alongX ? b : d, va = w.alongX ? c : a, vb = w.alongX ? d : b; if (u > ua - .05 && u < ub + .05 && vb > lo - .35 && va < hi + .35 && vb - va < .6) { lo = Math.min(lo, va); hi = Math.max(hi, vb); } }
-      if (hi - lo > .7) continue;
-      if (BREACH.some(o => o.alongX === w.alongX && Math.abs(o.u - u) < 1.0 && o.hi > lo - .1 && o.lo < hi + .1)) continue;
-      const m = (lo + hi) / 2, x = w.alongX ? u : m, z = w.alongX ? m : u;
-      BREACH.push({ u, lo, hi, x, z, alongX: w.alongX, th: hi - lo, x1: w.alongX ? u - .32 : lo - .3, x2: w.alongX ? u + .32 : hi + .3, z1: w.alongX ? lo - .3 : u - .32, z2: w.alongX ? hi + .3 : u + .32 });
-    }
-  }
-  N.BREACH = BREACH;
+  // gaten in de muur: hier kruipen zombies naar binnen (carport, wc, technische ruimte achter Bureau Stijn, middenblok)
+  //   x/z = vlak van de muur, ry = richting waarin het gat kijkt, sx/sz = waar de zombie verschijnt
+  N.BREACH = [];
+  N.HOLES = [
+    { name: 'carport', x: -3.688, z: -4.3, ry: Math.PI / 2, sx: -3.25, sz: -4.3 },
+    { name: 'wc', x: -2.45, z: .012, ry: 0, sx: -2.45, sz: .95 },
+    { name: 'technische ruimte', x: 19.738, z: 3.5, ry: -Math.PI / 2, sx: 19.3, sz: 3.5 },
+    { name: 'middenblok', x: 5.638, z: 6.7, ry: -Math.PI / 2, sx: 5.25, sz: 6.7 },
+  ];
   // gat in de muur: zwarte opening met gebroken randen en barsten
   const holeTex = (() => {
     const c = document.createElement('canvas'); c.width = 256; c.height = 320; const g = c.getContext('2d');
@@ -2712,13 +2705,9 @@ const NIGHT = (() => {
     g.fillStyle = gr; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill();
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   })();
-  const holes = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.05, 1.6), new THREE.MeshStandardMaterial({ map: holeTex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4 }), BREACH.length * 2);
+  const holes = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.0, 1.55), new THREE.MeshStandardMaterial({ map: holeTex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4 }), 8);
   { const o = new THREE.Object3D(); let n = 0;
-    for (const b of BREACH) for (const sd of [-1, 1]) {
-      const fx = b.alongX ? b.x : b.x + sd * (b.th / 2 + .02), fz = b.alongX ? b.z + sd * (b.th / 2 + .02) : b.z;
-      const gy = groundAt(fx + (b.alongX ? 0 : sd * .3), fz + (b.alongX ? sd * .3 : 0)) || 0;
-      o.position.set(fx, gy + .8, fz); o.rotation.set(0, b.alongX ? (sd > 0 ? 0 : Math.PI) : (sd > 0 ? Math.PI / 2 : -Math.PI / 2), 0); o.updateMatrix(); holes.setMatrixAt(n++, o.matrix);
-    }
+    for (const h of N.HOLES) { o.position.set(h.x, (groundAt(h.sx, h.sz) || 0) + .8, h.z); o.rotation.set(0, h.ry, 0); o.updateMatrix(); holes.setMatrixAt(n++, o.matrix); }
     holes.count = n; }
   holes.visible = false; holes.frustumCulled = false; holes.userData.aoVis = false; WORLD.add(holes);
   // nachthemel met sterren en maan
@@ -2758,18 +2747,18 @@ const NIGHT = (() => {
     let hemi = null; scene.traverse(o => { if (o.isHemisphereLight && !hemi) hemi = o; });
     N.saved = { all, bg: scene.background, fog: scene.fog, env: scene.environment, hemi: hemi && [hemi.color.clone(), hemi.groundColor.clone()], wl: [W0.hemi.intensity, W0.dl.intensity, W0.dl.color.clone()], vig: POST && POST.grade && POST.grade.uniforms.vig.value };
     for (const [o] of all) { if (o.isRectAreaLight || o.isPointLight || o.isSpotLight) o.intensity = 0; }
-    if (hemi) { hemi.color.set('#3c4d6e'); hemi.groundColor.set('#060708'); hemi.intensity = .16; }
-    sun.color.set('#8aa2d6'); sun.intensity = .32; fill.intensity = 0;
-    scene.background = sky; scene.fog = new THREE.FogExp2('#06080d', .075); scene.environment = null;
+    if (hemi) { hemi.color.set('#4a5d82'); hemi.groundColor.set('#0b0c0f'); hemi.intensity = .34; }
+    sun.color.set('#9ab0e0'); sun.intensity = .62; fill.intensity = 0;
+    scene.background = sky; scene.fog = new THREE.FogExp2('#0a0d14', .048); scene.environment = null;
     W0.hemi.intensity = .35; W0.dl.intensity = .7; W0.dl.color.set('#ffe2b8');
-    if (POST && POST.grade) { POST.grade.uniforms.vig.value = .85; POST.grade.uniforms.night.value = 1; }
+    if (POST && POST.grade) { POST.grade.uniforms.vig.value = .62; POST.grade.uniforms.night.value = .75; }
     const max = quality === 'laag' ? 5 : SPOTS_L.length;
     for (const [x, z, col, I, mode] of SPOTS_L.slice(0, max)) {
       const l = new THREE.PointLight(col, 0, 9, 1.8), y = (groundAt(x, z) || 0) + 2.55; l.position.set(x * WS, y * WS, z * WS);
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(.05, 10, 8), new THREE.MeshBasicMaterial({ color: col })); bulb.position.copy(l.position); bulb.position.y += .12;
       scene.add(l, bulb); N.lights.push({ l, bulb, I, mode, ph: Math.random() * 10, off: 0 });
     }
-    camera.add(torch, tt); torch.intensity = 3.6;
+    camera.add(torch, tt); torch.intensity = 5.5;
     holes.visible = true; startDrone(); SHADOW.force = true;
   };
   N.disable = () => {
@@ -2789,16 +2778,16 @@ const NIGHT = (() => {
       if (L.mode === 'flikker') { if (L.off > 0) { L.off -= dt; f = Math.random() < .3 ? .4 : .02; } else { f = .85 + Math.random() * .15; if (Math.random() < dt * .8) L.off = .05 + Math.random() * .5; } }
       else if (L.mode === 'puls') f = .15 + .85 * Math.max(0, Math.sin(N.t * 2.2 + L.ph)) ** 3;
       else if (L.mode === 'kaars') f = .75 + Math.sin(N.t * 9 + L.ph) * .1 + Math.random() * .15;
-      L.l.intensity = L.I * f; L.bulb.material.color.set(L.l.color).multiplyScalar(.15 + .85 * f);
+      L.l.intensity = L.I * 1.5 * f; L.bulb.material.color.set(L.l.color).multiplyScalar(.15 + .85 * f);
     }
-    torch.intensity = 3.6 * (Math.random() < .004 ? .2 : 1);
+    torch.intensity = 5.5 * (Math.random() < .004 ? .2 : 1);
   };
   const W0 = WPN.lights;
   return N;
 })();
 const ZB = (() => {
   const Z = { active: false, list: [], wave: 0, toSpawn: 0, spawnT: 0, score: 0, kills: 0, hp: 100, ammo: 12, mag: 12, reloadT: 0, fireT: 0, firing: false, gun: 'pistool', hurtT: 0, between: 0, gridT: 0, hud: null, prevThird: true };
-  const SPAWNS = [[7.85, 15.6], [.66, -1.1], [9.1, -1.2], [16.3, -1.2], [25.6, -3.5], [14.3, -5.5]];
+  const SPAWNS = [{ x: 7.85, z: 15.6 }, { x: 25.6, z: -3.5 }, { x: 14.3, z: -5.5 }, ...NIGHT.HOLES.map(h => ({ x: h.sx, z: h.sz, hole: h }))];   // voordeur, garagepoort, ondergrondse garage, gaten
   // ── looprooster: vrije cellen van 25 cm; afstandsveld vanaf de speler (breadth-first), zombies volgen de daling
   const G = { x0: -4, z0: -7.2, s: .25, w: 124, h: 114 }; G.block = new Uint8Array(G.w * G.h); G.dist = new Float32Array(G.w * G.h);
   function buildGrid() {
@@ -2827,8 +2816,9 @@ const ZB = (() => {
   // ── zombie aanmaken (personage + bleke huid + armen vooruit)
   const ZTINT = ['#9fb48a', '#a7b896', '#93a882'];
   function spawn() {
-    const [sx, sz] = SPAWNS[Math.random() * SPAWNS.length | 0], big = Z.wave >= 5 && Math.random() < .12, fast = Z.wave >= 3 && Math.random() < .25 + Z.wave * .02;
+    const sp = SPAWNS[Math.random() * SPAWNS.length | 0], sx = sp.x, sz = sp.z, big = Z.wave >= 5 && Math.random() < .12, fast = Z.wave >= 3 && Math.random() < .25 + Z.wave * .02;
     const z = { x: sx + (Math.random() - .5) * .6, z: sz + (Math.random() - .5) * .6, yaw: 0, hp: (2 + Math.floor(Z.wave / 2)) * (big ? 3 : 1), sp: (fast ? 1.35 : .62 + Z.wave * .05) * (big ? .8 : 1), fast, big, atk: 0, atkT: 0, hitT: 0, dead: 0, flash: 0, tinted: false };
+    if (sp.hole) { z.x = sp.hole.x + (sx - sp.hole.x) * .15; z.z = sp.hole.z + (sz - sp.hole.z) * .15; z.crawl = 1.6; z.cx = sx; z.cz = sz; z.yaw = Math.atan2(-(sx - sp.hole.x), -(sz - sp.hole.z)); }   // kruipt uit het gat
     z.av = zombieBody(z); if (big) z.av.scale.setScalar(1.25); scene.add(z.av); Z.list.push(z);
   }
   const ZFACE = Math.PI;
@@ -2856,74 +2846,207 @@ const ZB = (() => {
   const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
   function zaim(b, c, dir) { b.getWorldPosition(_a); c.getWorldPosition(_b); _b.sub(_a).normalize(); _q.setFromUnitVectors(_b, dir.clone().normalize()); b.getWorldQuaternion(_q2); b.parent.getWorldQuaternion(_q3).invert(); b.quaternion.copy(_q3.multiply(_q.multiply(_q2))); b.updateMatrixWorld(true); }
   function tint(z) { const m = z.model || (z.fb && z.fb.userData.model); if (!m || z.tinted) return; z.tinted = true; const col = new THREE.Color(z.real ? '#ffffff' : ZTINT[Math.random() * 3 | 0]); m.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.color.multiply(col); o.material.emissive = new THREE.Color(z.real ? '#000000' : '#0d1a08'); z.mat = z.mat || []; z.mat.push(o.material); } }); }
-  // ── HUD
+  // ── wapens, munten en winkel
+  const GUNS = { pistool: { name: 'Pistool', mag: 12, rate: .2, auto: false }, geweer: { name: 'Geweer (M4)', mag: 30, rate: .11, auto: true } };
+  const SHOP = { x: 4.62, z: 2.1 };   // voor het keukeneiland
+  const ITEMS = [
+    { k: 'geweer', name: 'Geweer (M4)', desc: 'automatisch · 30 kogels per lader + 60 reserve', price: 300 },
+    { k: 'kogels', name: 'Geweerkogels', desc: '+30 kogels voor het geweer', price: 40 },
+    { k: 'flash', name: 'Flashbang', desc: 'verdooft zombies in de buurt 4 s · gooien met G', price: 60 },
+    { k: 'med', name: 'Verbandkit', desc: '+50 gezondheid · gebruiken met H', price: 50 },
+  ];
+  const inv = () => Z.inv[Z.gun];
   function hud() {
     const h = document.createElement('div'); h.id = 'zhud'; h.innerHTML = `<style>
 #zhud{position:fixed;inset:0;pointer-events:none;font-family:var(--display);color:#f3efe7;z-index:4}
 #zhud .top{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px}
 #zhud .pill{background:rgba(16,18,24,.62);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 14px;font-weight:700;font-size:15px}
 #zhud .pill small{display:block;font:500 11px var(--mono);color:#a9a69f;letter-spacing:.08em;text-transform:uppercase}
+#zhud .coin{color:#ffcf5a}
 #zhud .hp{position:absolute;left:16px;bottom:16px;width:260px}#zhud .bar{height:12px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:6px}#zhud .bar i{display:block;height:100%;background:linear-gradient(90deg,#ff5a5a,#ffb547);transition:width .2s}
 #zhud .ammo{position:absolute;right:16px;bottom:16px;text-align:right}#zhud .ammo b{font-size:30px}
 #zhud .msg{position:absolute;top:30%;left:50%;transform:translateX(-50%);font:800 44px var(--display);text-shadow:0 4px 24px rgba(0,0,0,.6);letter-spacing:-.01em;text-align:center}
 #zhud .msg small{display:block;font:600 16px var(--display);color:#ffb547;margin-top:6px}
+#zhud .hint{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);display:none}
+#zhud .hint b{display:inline-block;background:#f3efe7;color:#15171c;border-radius:6px;padding:1px 8px;margin-right:8px}
 #zhud .hurt{position:absolute;inset:0;box-shadow:inset 0 0 160px rgba(200,0,0,.75);opacity:0;transition:opacity .15s}
+#zhud .white{position:absolute;inset:0;background:#fff;opacity:0}
 #zhud .xh{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
-</style><div class="hurt"></div><div class="xh"></div><div class="top"><div class="pill"><small>Golf</small><span id="zw">1</span></div><div class="pill"><small>Score</small><span id="zs">0</span></div><div class="pill"><small>Zombies</small><span id="zl">0</span></div></div>
-<div class="hp pill"><small>Gezondheid</small><div class="bar"><i id="zh" style="width:100%"></i></div></div><div class="ammo pill"><small id="zg">Pistool</small><b id="za">12</b><span style="color:#a9a69f"> / ∞</span><div style="font:500 11px var(--mono);color:#a9a69f">klik = schieten · R = herladen · Backspace = stoppen</div></div><div class="msg" id="zm"></div>`;
+#zmenu,#zshop{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(10,12,18,.72),rgba(4,5,8,.94));font-family:var(--display);color:#f3efe7}
+#zmenu .zc,#zshop .zc{width:min(760px,92vw);max-height:90vh;overflow:auto;background:rgba(20,22,30,.86);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:26px 30px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#zmenu h1{margin:0;font:800 44px var(--display);letter-spacing:-.02em;color:#f3efe7}#zmenu h1 span{color:#ff5a4a}
+#zmenu p{color:#c9c4bb;line-height:1.5;margin:8px 0 16px}
+#zmenu .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#zmenu h3,#zshop h3{margin:0 0 8px;font:700 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#ffb547}
+#zmenu ul{margin:0;padding:0;list-style:none;font-size:14px;line-height:1.9;color:#ddd8cf}
+#zmenu kbd,#zshop kbd{display:inline-block;min-width:22px;text-align:center;background:#f3efe7;color:#15171c;border-radius:5px;padding:0 6px;margin-right:8px;font:700 12px var(--mono)}
+#zmenu .load{margin-top:20px;height:8px;border-radius:6px;background:rgba(255,255,255,.1);overflow:hidden}#zmenu .load i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff5a4a,#ffb547);transition:width .3s}
+#zmenu .row,#zshop .row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px}
+#zmenu .st{font:500 13px var(--mono);color:#a9a69f}
+#zmenu button,#zshop button{font:700 16px var(--display);border:0;border-radius:12px;padding:12px 22px;background:#ff5a4a;color:#fff;cursor:pointer}
+#zmenu button:disabled{background:#3a3d46;color:#8b8f99;cursor:default}
+#zshop .items{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+#zshop .it{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 14px;text-align:left;color:#f3efe7;font:inherit;cursor:pointer}
+#zshop .it:hover{border-color:#ffb547}#zshop .it[disabled]{opacity:.45;cursor:default}
+#zshop .it b{display:block;font-size:16px}#zshop .it span{display:block;color:#a9a69f;font-size:13px;margin:3px 0 8px}#zshop .it em{font-style:normal;color:#ffcf5a;font-weight:700}
+#zshop .coins{font:800 26px var(--display);color:#ffcf5a}
+</style><div class="white" id="zwh"></div><div class="hurt"></div><div class="xh"></div><div class="top"><div class="pill"><small>Golf</small><span id="zw">1</span></div><div class="pill"><small>Score</small><span id="zs">0</span></div><div class="pill"><small>Zombies</small><span id="zl">0</span></div><div class="pill coin"><small>Munten</small><span id="zc">0</span></div></div>
+<div class="hp pill"><small>Gezondheid</small><div class="bar"><i id="zh" style="width:100%"></i></div></div><div class="ammo pill"><small id="zg">Pistool</small><b id="za">12</b><span style="color:#a9a69f" id="zr2"> / ∞</span><div style="font:500 11px var(--mono);color:#a9a69f" id="zi"></div><div style="font:500 11px var(--mono);color:#a9a69f">klik = schieten · R = herladen · 1/2 = wapen · Backspace = stoppen</div></div>
+<div class="pill hint" id="zhint"><b>E</b>winkel in de keuken</div><div class="msg" id="zm"></div>`;
     document.body.appendChild(h); return h;
   }
   const $ = id => Z.hud && Z.hud.querySelector('#' + id);
   function say(t, sub = '', dur = 2.2) { const m = $('zm'); if (!m) return; m.innerHTML = t + (sub ? `<small>${sub}</small>` : ''); clearTimeout(say.t); say.t = setTimeout(() => { if ($('zm')) $('zm').innerHTML = ''; }, dur * 1000); }
-  function setHud() { if (!Z.hud) return; $('zw').textContent = Z.wave; $('zs').textContent = Z.score; $('zl').textContent = Z.list.filter(z => !z.dead).length + Z.toSpawn; $('zh').style.width = Math.max(0, Z.hp) + '%'; $('za').textContent = Z.reloadT > 0 ? '…' : Z.ammo; $('zg').textContent = Z.gun === 'geweer' ? 'Geweer' : 'Pistool'; }
+  function setHud() {
+    if (!Z.hud) return; const w = inv();
+    $('zw').textContent = Z.wave; $('zs').textContent = Z.score; $('zc').textContent = Z.coins; $('zl').textContent = Z.list.filter(z => !z.dead).length + Z.toSpawn; $('zh').style.width = Math.max(0, Z.hp) + '%';
+    $('za').textContent = Z.reloadT > 0 ? '…' : w.ammo; $('zr2').textContent = ' / ' + (w.res === Infinity ? '∞' : w.res); $('zg').textContent = GUNS[Z.gun].name;
+    $('zi').textContent = `G flashbang ×${Z.flash} · H verband ×${Z.med}`;
+  }
+  // bord boven het keukeneiland en een vast flitslicht (zo verandert het aantal lichten nooit tijdens het spel)
+  const sign = (() => { const t = ctex(256, 96, (g, w, h) => { g.fillStyle = '#10140f'; g.fillRect(0, 0, w, h); g.strokeStyle = '#7dff8a'; g.lineWidth = 6; g.strokeRect(6, 6, w - 12, h - 12); g.fillStyle = '#9dffa8'; g.font = 'bold 50px Archivo, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('WINKEL', w / 2, h / 2 + 3); }, 1);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(.75, .28), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide })); m.position.set(3.7 * WS, 1.45 * WS, 2.1 * WS); m.rotation.y = Math.PI / 2; return m; })();
+  const boomL = new THREE.PointLight('#ffffff', 0, 14, 1.6);
+  // ── startmenu: uitleg terwijl wapens, zombies en het nachtlicht worden voorbereid (dan hapert het daarna niet meer)
+  function menu() {
+    const m = document.createElement('div'); m.id = 'zmenu'; m.innerHTML = `<div class="zc"><h1>Zombie<span>-aanval</span></h1>
+<p>Het is nacht op kantoor. Zombies kruipen naar binnen door de voordeur, de garagepoort, de ondergrondse garage en door gaten in de carport, het wc, de technische ruimte en het middenblok. Overleef zo veel mogelijk golven.</p>
+<div class="grid"><div><h3>Bediening</h3><ul><li><kbd>WASD</kbd>lopen · <kbd>Shift</kbd>sneller</li><li><kbd>klik</kbd>schieten (ingedrukt houden met het geweer)</li><li><kbd>R</kbd>herladen · <kbd>1</kbd><kbd>2</kbd>wapen wisselen</li><li><kbd>G</kbd>flashbang gooien · <kbd>H</kbd>verband</li><li><kbd>Backspace</kbd>stoppen</li></ul></div>
+<div><h3>Munten en winkel</h3><ul><li>Elke zombie: <b>10 munten</b>, hoofdschot +5</li><li>Elke nieuwe golf: bonus</li><li>Winkel aan het <b>keukeneiland</b> (<kbd>E</kbd>)</li><li>Geweer, kogels, flashbangs en verband</li><li>Het spel pauzeert terwijl je winkelt</li></ul></div></div>
+<div class="load"><i id="zml"></i></div><div class="row"><span class="st" id="zms">laden…</span><button id="zmb" disabled>Start</button></div></div>`;
+    document.body.appendChild(m); return m;
+  }
+  async function warm() {
+    const st = t => { const e = Z.menu && Z.menu.querySelector('#zms'); if (e) e.textContent = t; }, bar = p => { const e = Z.menu && Z.menu.querySelector('#zml'); if (e) e.style.width = p + '%'; };
+    st('wapens laden…'); bar(10); await WPN.load(); bar(40);
+    st('zombies laden…'); const [zm, clips] = await Promise.all([zombieModels(), zombieClips()]); bar(75);
+    st('licht en schaduwen voorbereiden…'); await new Promise(r => setTimeout(r, 30));
+    const tmp = [], f = camera.getWorldDirection(new THREE.Vector3()), o = camera.getWorldPosition(new THREE.Vector3());
+    if (zm && clips) zm.forEach((base, i) => { const m = SkeletonUtils.clone(base); retargetZombie(base, clips); m.scale.setScalar(.02); m.position.copy(o).addScaledVector(f, 3).add(V(i * .3 - .45, -1, 0)); m.traverse(x => { if (x.isMesh) { x.frustumCulled = false; x.castShadow = true; } }); scene.add(m); tmp.push(m); });
+    const hs = Object.values(WPN.list).map(w => w.holder); hs.forEach(h => h.visible = true);
+    try { renderer.compile(scene, camera); renderer.compile(WPN.scene, camera); } catch (e) { }
+    SHADOW.force = true; renderFrame(1 / 60); hs.forEach(h => h.visible = false); WPN.show(Z.gun);
+    await new Promise(r => setTimeout(r, 60)); tmp.forEach(m => scene.remove(m)); bar(100); st('klaar');
+  }
+  // ── winkel
+  function canBuy(it) { if (Z.coins < it.price) return false; if (it.k === 'geweer') return !Z.inv.geweer.owned; if (it.k === 'kogels') return Z.inv.geweer.owned; return true; }
+  function buy(it) {
+    if (!canBuy(it)) return; Z.coins -= it.price; sfx(880, .08, 'triangle', .06); setTimeout(() => sfx(1320, .1, 'triangle', .05), 80);
+    if (it.k === 'geweer') { Object.assign(Z.inv.geweer, { owned: true, ammo: 30, res: 60 }); switchGun('geweer'); }
+    if (it.k === 'kogels') Z.inv.geweer.res += 30;
+    if (it.k === 'flash') Z.flash++; if (it.k === 'med') Z.med++;
+    setHud(); renderShop();
+  }
+  function renderShop() {
+    if (!Z.shop) return; const c = Z.shop.querySelector('.items'); c.innerHTML = '';
+    Z.shop.querySelector('.coins').textContent = Z.coins + ' munten';
+    for (const it of ITEMS) { const b = document.createElement('button'); b.className = 'it'; b.disabled = !canBuy(it); b.innerHTML = `<b>${it.name}${it.k === 'geweer' && Z.inv.geweer.owned ? ' · in bezit' : ''}</b><span>${it.desc}</span><em>${it.price} munten</em>`; b.onclick = () => buy(it); c.appendChild(b); }
+  }
+  function openShop() {
+    if (Z.shop) return; Z.paused = true; Z.firing = false; try { document.exitPointerLock(); } catch (e) { }
+    const s = document.createElement('div'); s.id = 'zshop'; s.innerHTML = `<div class="zc"><div class="row" style="margin-top:0"><h3 style="margin:0">Winkel · keuken</h3><span class="coins"></span></div><div class="items"></div><div class="row"><span style="color:#a9a69f;font-size:13px">Het spel staat op pauze. <kbd>E</kbd> of <kbd>Esc</kbd> sluit de winkel.</span><button id="zsx">Terug naar het gevecht</button></div></div>`;
+    document.body.appendChild(s); Z.shop = s; renderShop(); s.querySelector('#zsx').onclick = closeShop;
+  }
+  function closeShop() { if (!Z.shop) return; Z.shop.remove(); Z.shop = null; Z.paused = false; tryLock(); }
+  function switchGun(k) { if (!Z.inv[k].owned || Z.gun === k || Z.reloadT > 0) return; Z.gun = k; if (WPN.ready) WPN.show(k); sfx(330, .05); setHud(); }
   // ── starten en stoppen
   function start() {
-    if (Z.active) return; if (SIT.seat) return; Z.active = true; Z.prevThird = third; third = false; buildGrid(); flow(); NIGHT.enable(); Z.groanT = 2;
-    doors.forEach(d => { d.target = 1; }); Object.assign(Z, { wave: 0, score: 0, kills: 0, hp: 100, gun: 'pistool', mag: 12, ammo: 12, reloadT: 0, between: 1.5, toSpawn: 0 }); rifle.forEach(m => m.visible = false);
-    gun.visible = !WPN.ready; WPN.load().then(() => { if (Z.active) { gun.visible = !WPN.ready; WPN.show(Z.gun); } }); zombieClips(); Z.hud = hud(); document.getElementById('cross').style.display = 'none'; setHud(); say('Zombie-aanval', 'ze komen langs de deuren binnen', 2.5); sfx(110, .8, 'sawtooth', .07, -50);
-    if (!locked) tryLock();
+    if (Z.active) return; if (SIT.seat) return; Z.active = true; Z.phase = 'menu'; Z.prevThird = third; third = false; buildGrid(); flow(); NIGHT.enable(); Z.groanT = 2;
+    doors.forEach(d => { d.target = 1; });
+    Object.assign(Z, { wave: 0, score: 0, kills: 0, coins: 0, hp: 100, gun: 'pistool', reloadT: 0, between: 1.5, toSpawn: 0, flash: 0, med: 0, paused: false, nades: [], boom: 0,
+      inv: { pistool: { owned: true, ammo: 12, res: Infinity }, geweer: { owned: false, ammo: 0, res: 0 } } });
+    rifle.forEach(m => m.visible = false); gun.visible = false;
+    scene.add(sign, boomL); boomL.intensity = 0;
+    Z.hud = hud(); document.getElementById('cross').style.display = 'none'; setHud();
+    try { document.exitPointerLock(); } catch (e) { }
+    Z.menu = menu(); const btn = Z.menu.querySelector('#zmb');
+    btn.onclick = () => { if (!Z.active) return; Z.menu.remove(); Z.menu = null; Z.phase = 'play'; tryLock(); say('Zombie-aanval', 'ze komen van overal binnen', 2.5); sfx(110, .8, 'sawtooth', .07, -50); };
+    warm().then(() => { if (Z.menu) { btn.disabled = false; btn.focus(); } }).catch(e => { console.warn(e); if (Z.menu) btn.disabled = false; });
   }
   function stop(showResult) {
     if (!Z.active) return; Z.active = false; third = Z.prevThird; gun.visible = false; WPN.hide(); NIGHT.disable();
-    for (const z of Z.list) { z.gone = true; scene.remove(z.av); } Z.list = []; if (Z.hud) Z.hud.remove(); Z.hud = null; document.getElementById('cross').style.display = '';
+    for (const z of Z.list) { z.gone = true; scene.remove(z.av); } Z.list = []; for (const n of Z.nades || []) scene.remove(n.m); Z.nades = [];
+    scene.remove(sign, boomL); if (Z.hud) Z.hud.remove(); Z.hud = null; if (Z.menu) Z.menu.remove(); Z.menu = null; if (Z.shop) Z.shop.remove(); Z.shop = null; Z.paused = false;
+    document.getElementById('cross').style.display = '';
     if (showResult) { SCORES.submit('zombies', Z.score); openGame(RESULT); }
   }
   const RESULT = { open(p) { p.insertAdjacentHTML('beforeend', `<h2>Je bent opgegeten</h2><div style="display:flex;gap:28px;flex-wrap:wrap"><div><div class="muted">Score</div><div style="font:800 48px var(--display)">${Z.score}</div><div class="muted">Golf ${Z.wave} · ${Z.kills} zombies neergeschoten</div><div style="margin-top:14px"><button class="b" id="zr">Opnieuw</button><button class="b alt" id="zq">Stoppen</button></div></div><div id="zlb" style="min-width:240px"></div></div>`); SCORES.render(p.querySelector('#zlb'), 'zombies', 'Zombie-aanval · ranglijst'); p.querySelector('#zr').onclick = () => { closeGame(true); start(); }; p.querySelector('#zq').onclick = () => closeGame(); }, key() { } };
   // ── schieten
   const hitWall = (x0, z0, x1, z1) => { for (const [a, b, c, d] of mapWalls) { let t0 = 0, t1 = 1; const dx = x1 - x0, dz = z1 - z0; for (const [p, q] of [[-dx, x0 - a], [dx, b - x0], [-dz, z0 - c], [dz, d - z0]]) { if (p === 0) { if (q < 0) { t0 = 2; break; } } else { const r = q / p; if (p < 0) t0 = Math.max(t0, r); else t1 = Math.min(t1, r); } } if (t0 <= t1 && t0 < 1 && t1 > 0) return true; } return false; };
   function shoot() {
-    if (Z.reloadT > 0) return; if (Z.ammo <= 0) { reload(); return; }
-    Z.ammo--; Z.fireT = Z.gun === 'geweer' ? .11 : .2; if (WPN.ready) WPN.play('fire', Z.gun === 'geweer' ? 1.4 : 1.1); flash.visible = true; flash.rotation.z = Math.random() * 3; Z.kick = 1; noise(.09, .16); sfx(160, .08, 'square', .05, -100);
+    const w = inv(); if (Z.reloadT > 0) return; if (w.ammo <= 0) { reload(); return; }
+    w.ammo--; Z.fireT = GUNS[Z.gun].rate; if (WPN.ready) WPN.play('fire', Z.gun === 'geweer' ? 1.4 : 1.1); flash.visible = true; flash.rotation.z = Math.random() * 3; Z.kick = 1; noise(.09, .16); sfx(160, .08, 'square', .05, -100);
     const o = camera.getWorldPosition(new THREE.Vector3()), d = camera.getWorldDirection(new THREE.Vector3()); let best = null, bt = 1e9, head = false;
     for (const z of Z.list) {
-      if (z.dead) continue; const cx = z.x * WS, cz = z.z * WS, r = .32 * (z.big ? 1.25 : 1), H = 1.95 * (z.big ? 1.25 : 1);
+      if (z.dead) continue; const cx = z.x * WS, cz = z.z * WS, r = .32 * (z.big ? 1.25 : 1), Hh = 1.95 * (z.big ? 1.25 : 1), gy = groundAt(z.x, z.z) * WS;
       const ox = o.x - cx, oz = o.z - cz, a = d.x * d.x + d.z * d.z, b = 2 * (ox * d.x + oz * d.z), c = ox * ox + oz * oz - r * r, disc = b * b - 4 * a * c; if (disc < 0) continue;
-      const t = (-b - Math.sqrt(disc)) / (2 * a); if (t < 0 || t > bt) continue; const y = o.y + d.y * t - P.y * WS; if (y < 0 || y > H) continue;
-      bt = t; best = z; head = y > H * .8;
+      const t = (-b - Math.sqrt(disc)) / (2 * a); if (t < 0 || t > bt) continue; const y = o.y + d.y * t - gy; if (y < 0 || y > Hh) continue;
+      bt = t; best = z; head = y > Hh * .8;
     }
     if (best && hitWall(o.x / WS, o.z / WS, best.x, best.z)) best = null;
     if (best) { best.hp -= head ? 2 : 1; best.flash = .12; best.kb = .12; best.hitT = .45; sfx(head ? 900 : 520, .06, 'square', .05); if (best.hp <= 0) kill(best, head); }
-    if (Z.ammo === 0) setTimeout(reload, 150); setHud();
+    if (w.ammo === 0) setTimeout(reload, 150); setHud();
   }
-  function reload() { if (Z.reloadT > 0 || Z.ammo === Z.mag) return; Z.reloadT = WPN.ready && WPN.cur ? WPN.play('reload', 1.9) : (Z.gun === 'geweer' ? 1.6 : 1.2); sfx(300, .05); setTimeout(() => sfx(420, .05), 500); setHud(); }
-  function kill(z, head) { z.dead = 1e-3; Z.kills++; Z.score += Math.round((10 + (head ? 5 : 0)) * (1 + Z.wave * .25) * (z.big ? 3 : 1)); sfx(140, .4, 'sawtooth', .05, -80); setHud(); }
-  document.addEventListener('mousedown', e => { if (!Z.active || !locked || e.button !== 0) return; Z.firing = true; if (Z.fireT <= 0) shoot(); });
+  function reload() { const w = inv(); if (Z.reloadT > 0 || w.ammo >= GUNS[Z.gun].mag || w.res <= 0) { if (w.res <= 0 && w.ammo === 0) say('Geen kogels meer', 'koop kogels in de keuken of wissel naar het pistool (1)', 2); return; } Z.reloadT = WPN.ready && WPN.cur ? WPN.play('reload', 1.9) : 1.4; sfx(300, .05); setTimeout(() => sfx(420, .05), 500); setHud(); }
+  function finishReload() { const w = inv(), need = GUNS[Z.gun].mag - w.ammo, take = Math.min(need, w.res); w.ammo += take; if (w.res !== Infinity) w.res -= take; setHud(); }
+  function kill(z, head) { z.dead = 1e-3; Z.kills++; const c = (10 + (head ? 5 : 0)) * (z.big ? 3 : 1); Z.coins += c; Z.score += Math.round(c * (1 + Z.wave * .25)); sfx(140, .4, 'sawtooth', .05, -80); setHud(); }
+  // ── flashbang en verband
+  function throwFlash() {
+    if (Z.flash <= 0) { say('Geen flashbangs', 'te koop in de keuken', 1.5); return; } Z.flash--; setHud();
+    const o = camera.getWorldPosition(new THREE.Vector3()), d = camera.getWorldDirection(new THREE.Vector3());
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, .12, 10), new THREE.MeshStandardMaterial({ color: '#3b3f45', metalness: .5, roughness: .4 })); m.position.copy(o).addScaledVector(d, .4); scene.add(m);
+    Z.nades.push({ m, v: d.clone().multiplyScalar(9).add(V(0, 2.2, 0)), t: 1.2 }); sfx(500, .06, 'triangle', .04);
+  }
+  function boom(p) {
+    noise(.5, .3); sfx(2200, .35, 'sine', .08, -1800); boomL.position.copy(p); Z.boom = .25;
+    const px = p.x / WS, pz = p.z / WS, me = Math.hypot(px - P.x, pz - P.z);
+    if (me < 9 && !hitWall(px, pz, P.x, P.z)) { const look = camera.getWorldDirection(new THREE.Vector3()), to = p.clone().sub(camera.getWorldPosition(new THREE.Vector3())).normalize(); Z.white = Math.max(Z.white || 0, (1 - me / 9) * (look.dot(to) > .2 ? 1 : .45)); }
+    for (const z of Z.list) if (!z.dead && Math.hypot(z.x - px, z.z - pz) < 4.5 && !hitWall(px, pz, z.x, z.z)) { z.stun = 4; z.atkT = 0; }
+  }
+  function useMed() { if (Z.med <= 0) { say('Geen verband', 'te koop in de keuken', 1.5); return; } if (Z.hp >= 100) return; Z.med--; Z.hp = Math.min(100, Z.hp + 50); sfx(660, .12, 'triangle', .05); setTimeout(() => sfx(990, .15, 'triangle', .05), 120); setHud(); }
+  document.addEventListener('mousedown', e => { if (!Z.active || Z.phase !== 'play' || Z.paused || !locked || e.button !== 0) return; Z.firing = true; if (Z.fireT <= 0) shoot(); });
   addEventListener('mouseup', () => { Z.firing = false; });
-  addEventListener('keydown', e => { if (!Z.active || GM.active) return; if (e.code === 'KeyR') reload(); if (e.code === 'Backspace') { e.preventDefault(); stop(false); } });
+  addEventListener('keydown', e => {
+    if (!Z.active || GM.active) return;
+    if (Z.shop) { if (e.code === 'KeyE' || e.code === 'Escape') { e.preventDefault(); closeShop(); } return; }
+    if (e.code === 'Backspace') { e.preventDefault(); stop(false); return; }
+    if (Z.phase !== 'play') { if (e.code === 'Enter' && Z.menu && !Z.menu.querySelector('#zmb').disabled) Z.menu.querySelector('#zmb').click(); return; }
+    if (e.code === 'KeyR') reload(); if (e.code === 'Digit1') switchGun('pistool'); if (e.code === 'Digit2') switchGun('geweer');
+    if (e.code === 'KeyG') throwFlash(); if (e.code === 'KeyH') useMed();
+    if (e.code === 'KeyE' && Math.hypot(P.x - SHOP.x, P.z - SHOP.z) < 1.3) openShop();
+  }, true);
+  function zcollide(z) {
+    const r = .2;
+    for (const c of colliders) {
+      if (c.on && !c.on()) continue; const x1 = c.x1 - r, x2 = c.x2 + r, z1 = c.z1 - r, z2 = c.z2 + r;
+      if (z.x > x1 && z.x < x2 && z.z > z1 && z.z < z2) { const a = z.x - x1, b = x2 - z.x, d = z.z - z1, e = z2 - z.z, m = Math.min(a, b, d, e); if (m === a) z.x = x1; else if (m === b) z.x = x2; else if (m === d) z.z = z1; else z.z = z2; }
+    }
+  }
   // ── elke beeldwissel
   function update(dt) {
     if (!Z.active) return;
-    NIGHT.update(dt); Z.groanT -= dt;
+    NIGHT.update(dt);
+    if (Z.phase !== 'play' || Z.paused) return;
+    Z.groanT -= dt;
     if (Z.groanT <= 0) { Z.groanT = 1.2 + Math.random() * 2.5; let best = null, bd = 14; for (const z of Z.list) { if (z.dead) continue; const dd = Math.hypot(z.x - P.x, z.z - P.z); if (dd < bd && Math.random() < .6) { bd = dd; best = z; } } if (best) NIGHT.groan(.07 * (1 - bd / 14) + .01); }
     Z.fireT -= dt; if (Z.firing && Z.gun === 'geweer' && Z.fireT <= 0) shoot();
-    if (Z.reloadT > 0) { Z.reloadT -= dt; if (Z.reloadT <= 0) { Z.ammo = Z.mag; setHud(); } }
+    if (Z.reloadT > 0) { Z.reloadT -= dt; if (Z.reloadT <= 0) finishReload(); }
     flash.visible = !WPN.ready && Z.fireT > (Z.gun === 'geweer' ? .07 : .15); WPN.update(dt); Z.kick = Math.max(0, (Z.kick || 0) - dt * 8);
     gun.position.set(.17, -.15 + Math.sin(performance.now() / 300) * .003 * Math.min(1, mySpeed), -.36 + Z.kick * .04); gun.rotation.x = Z.kick * .12 + (Z.reloadT > 0 ? .6 : 0); rifle.forEach(m => m.visible = Z.gun === 'geweer');
     // golven
     const alive = Z.list.filter(z => !z.dead).length;
-    if (!Z.toSpawn && !alive) { Z.between -= dt; if (Z.between <= 0) { Z.wave++; Z.toSpawn = 3 + Z.wave * 3; Z.between = 4; if (Z.wave > 1) Z.score += Z.wave * 25; if (Z.wave === 4 && Z.gun !== 'geweer') { Z.gun = 'geweer'; Z.mag = 30; Z.ammo = 30; if (WPN.ready) WPN.show('geweer'); say('Golf ' + Z.wave, 'je vond een automatisch geweer: hou de muis ingedrukt'); } else say('Golf ' + Z.wave, Z.wave >= 5 ? 'er lopen ook grote zombies rond' : Z.wave >= 3 ? 'sommige zombies lopen hard' : ''); setHud(); } }
+    if (!Z.toSpawn && !alive) { Z.between -= dt; if (Z.between <= 0) { Z.wave++; Z.toSpawn = 3 + Z.wave * 3; Z.between = 4; if (Z.wave > 1) { Z.score += Z.wave * 25; Z.coins += 20 + Z.wave * 5; } if (Z.wave === 2) say('Golf 2', 'munten sparen? de winkel staat in de keuken (E)'); else say('Golf ' + Z.wave, Z.wave >= 5 ? 'er lopen ook grote zombies rond' : Z.wave >= 3 ? 'sommige zombies lopen hard' : ''); setHud(); } }
     if (Z.toSpawn > 0 && alive < 10) { Z.spawnT -= dt; if (Z.spawnT <= 0) { spawn(); Z.toSpawn--; Z.spawnT = Math.max(.45, 1.6 - Z.wave * .1); setHud(); } }
     Z.gridT -= dt; if (Z.gridT <= 0) { flow(); Z.gridT = .3; }
+    // flashbangs: boog, stuiteren op de vloer, ontploffen na 1,2 s
+    for (const n of Z.nades) { n.v.y -= 9.8 * dt; const p0 = n.m.position.clone(); n.m.position.addScaledVector(n.v, dt); n.m.rotation.x += dt * 9;
+      if (hitWall(p0.x / WS, p0.z / WS, n.m.position.x / WS, n.m.position.z / WS)) { n.m.position.x = p0.x; n.m.position.z = p0.z; n.v.x *= -.3; n.v.z *= -.3; }
+      const gy = groundAt(n.m.position.x / WS, n.m.position.z / WS) * WS + .04; if (n.m.position.y < gy) { n.m.position.y = gy; n.v.y = Math.abs(n.v.y) * .3; n.v.x *= .6; n.v.z *= .6; }
+      n.t -= dt; if (n.t <= 0) { boom(n.m.position.clone()); scene.remove(n.m); n.m.geometry.dispose(); } }
+    Z.nades = Z.nades.filter(n => n.t > 0);
+    Z.boom = Math.max(0, Z.boom - dt); boomL.intensity = Z.boom > 0 ? 80 * Z.boom / .25 : 0;
+    Z.white = Math.max(0, (Z.white || 0) - dt * .7); const wh = $('zwh'); if (wh) wh.style.opacity = Math.min(1, Z.white * 1.2);
+    const hint = $('zhint'); if (hint) hint.style.display = Math.hypot(P.x - SHOP.x, P.z - SHOP.z) < 1.3 ? 'block' : 'none';
     // zombies
     for (const z of Z.list) {
       const av = z.av; tint(z); const real = !!z.mx;
@@ -2933,16 +3056,24 @@ const ZB = (() => {
         else { av.rotation.x = -Math.min(1, z.dead / .55) * Math.PI / 2 * .95; av.position.y = P.y * WS - Math.max(0, z.dead - 1.6) * .5; if (z.fb) z.fb.userData.anim(dt, 0); }
         continue;
       }
+      if (z.crawl > 0) {   // kruipt uit het gat: langzaam, voorovergebogen
+        z.crawl -= dt; const dx = z.cx - z.x, dz = z.cz - z.z, dl = Math.hypot(dx, dz); if (dl > .02) { z.x += dx / dl * Math.min(dl, .55 * dt); z.z += dz / dl * Math.min(dl, .55 * dt); }
+        av.position.set(z.x * WS, groundAt(z.x, z.z) * WS, z.z * WS); av.rotation.y = z.yaw; av.rotation.x = .5 * Math.min(1, z.crawl);
+        if (real) { zplay(z, 'walk', .2, .7); z.mx.update(dt); } continue;
+      }
+      if (z.stun > 0) {   // verdoofd door een flashbang
+        z.stun -= dt; av.rotation.x = 0; av.rotation.z = Math.sin(performance.now() / 180 + z.x) * .06; if (real) { zplay(z, 'idle2', .2, .6); z.mx.update(dt); } z.flash -= dt; continue;
+      } else av.rotation.z = 0;
       let tx = P.x, tz = P.z; const [ci, cj] = cell(z.x, z.z), dP = Math.hypot(P.x - z.x, P.z - z.z);
       if (dP > .9 && ci >= 0 && cj >= 0 && ci < G.w && cj < G.h && G.dist[cj * G.w + ci] < 1e8) { let bd = G.dist[cj * G.w + ci], bi = ci, bj = cj; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const v = G.dist[nj * G.w + ni]; if (v < bd) { bd = v; bi = ni; bj = nj; } } tx = G.x0 + (bi + .5) * G.s; tz = G.z0 + (bj + .5) * G.s; }
       let vx = tx - z.x, vz = tz - z.z; const vl = Math.hypot(vx, vz) || 1; vx /= vl; vz /= vl;
       for (const o of Z.list) if (o !== z && !o.dead) { const dx = z.x - o.x, dz = z.z - o.z, dd = Math.hypot(dx, dz); if (dd < .55 && dd > 1e-3) { vx += dx / dd * (.55 - dd) * 2; vz += dz / dd * (.55 - dd) * 2; } }
       z.kb = (z.kb || 0) - dt; z.hitT -= dt; z.atk -= dt;
-      const busy = z.atkT > 0 || (real && z.hitT > 0), inBr = ci >= 0 && cj >= 0 && ci < G.w && cj < G.h && G.br && G.br[cj * G.w + ci], move = dP > .62 && !busy ? z.sp * (z.kb > 0 ? .25 : 1) * (inBr ? .45 : 1) * dt : 0;
-      z.x += vx * move; z.z += vz * move; const want = Math.atan2(-(P.x - z.x), -(P.z - z.z)); z.yaw += Math.atan2(Math.sin(want - z.yaw), Math.cos(want - z.yaw)) * Math.min(1, dt * 6);
-      z.crouch = (z.crouch || 0) + ((inBr ? 1 : 0) - (z.crouch || 0)) * Math.min(1, dt * 6); av.position.set(z.x * WS, groundAt(z.x, z.z) * WS, z.z * WS); av.rotation.y = z.yaw; av.rotation.x = z.crouch * .35;
+      const busy = z.atkT > 0 || (real && z.hitT > 0), move = dP > .62 && !busy ? z.sp * (z.kb > 0 ? .25 : 1) * dt : 0;
+      z.x += vx * move; z.z += vz * move; zcollide(z);   // niet door muren, ramen of meubels const want = Math.atan2(-(P.x - z.x), -(P.z - z.z)); z.yaw += Math.atan2(Math.sin(want - z.yaw), Math.cos(want - z.yaw)) * Math.min(1, dt * 6);
+      av.position.set(z.x * WS, groundAt(z.x, z.z) * WS, z.z * WS); av.rotation.y = z.yaw; av.rotation.x = 0;
       // aanval: animatie start, schade halverwege als je nog dichtbij staat
-      if (dP < .75 && z.atk <= 0 && z.atkT <= 0) { z.atkT = 1.25; z.atk = 1.7; z.dmg = true; z.atkK = Math.random() < .5 ? 'attack' : 'attack2'; }
+      if (dP < .75 && z.atk <= 0 && z.atkT <= 0 && !hitWall(z.x, z.z, P.x, P.z)) { z.atkT = 1.25; z.atk = 1.7; z.dmg = true; z.atkK = Math.random() < .5 ? 'attack' : 'attack2'; }
       if (z.atkT > 0) { z.atkT -= dt; if (z.dmg && z.atkT < .65) { z.dmg = false; if (dP < 1.0) { Z.hp -= (z.big ? 18 : 9) + Z.wave; Z.hurtT = .35; noise(.15, .1); sfx(90, .2, 'sawtooth', .06); setHud(); } } }
       if (real) {
         if (z.atkT > 0) zplay(z, z.atkK, .15, (z.atkK === 'attack' ? 2.63 : 4.63) / 1.25);
@@ -2957,7 +3088,7 @@ const ZB = (() => {
     Z.hurtT -= dt; const hurt = Z.hud && Z.hud.querySelector('.hurt'); if (hurt) hurt.style.opacity = Math.max(0, Z.hurtT * 2.5) + (Z.hp < 30 ? .25 : 0);
     if (Z.hp <= 0) stop(true);
   }
-  SPOTS.push({ x: 24.9, z: -2.0, tx: 26.5, tz: -2.0, r: 1.8, label: 'zombie-aanval starten (garagepoort)', act: start });
+  SPOTS.push({ x: 24.9, z: -2.0, tx: 26.5, tz: -2.0, r: 1.8, label: 'zombie-aanval (garagepoort)', act: start });
   return { Z, update, start, stop, get active() { return Z.active; } };
 })();
 frame();
