@@ -2176,7 +2176,7 @@ function frame() {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); sizeMap(); });
 window.__view = (x, z, yaw, pitch = 0) => { Object.assign(P, { x, z, yaw, pitch }); P.y = groundAt(x, z); started = true; overlay.hidden = true; };
 window.__third = (on) => { third = on; };
-window.__interact = () => interact(); window.__zb = () => ZB; window.__night = () => NIGHT; window.__dbgN = () => { const L = []; scene.traverse(o => { if (o.isLight && o.intensity > 0 && o.visible) L.push(o.type + ':' + o.intensity.toFixed(2)); }); const mt = {}; scene.traverse(o => { if (o.isMesh && o.visible) { const m = [].concat(o.material)[0]; const k = m.type + (m.emissive && m.emissive.getHex() ? ' em' : '') + (m.envMap ? ' env' : '') + (m.lightMap ? ' lm' : ''); mt[k] = (mt[k] || 0) + 1; } }); const hs = []; scene.traverse(o => { if (o.isHemisphereLight) hs.push([o.parent && o.parent.type, o.intensity, o.color.getHexString(), scene.children.indexOf(o)]); }); return { hs, L, env: !!scene.environment, fog: scene.fog && scene.fog.type, mt }; }; window.__wpn = () => ({ ready: WPN.ready, cur: !!WPN.cur }); window.__camdbg = () => ({ parent: camera.parent && camera.parent.type, kids: camera.children.length, vis: camera.children.map(c => c.visible), near: camera.near }); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
+window.__interact = () => interact(); window.__zb = () => ZB; window.__pp = () => ({ x: P.x, z: P.z }); window.__night = () => NIGHT; window.__dbgN = () => { const L = []; scene.traverse(o => { if (o.isLight && o.intensity > 0 && o.visible) L.push(o.type + ':' + o.intensity.toFixed(2)); }); const mt = {}; scene.traverse(o => { if (o.isMesh && o.visible) { const m = [].concat(o.material)[0]; const k = m.type + (m.emissive && m.emissive.getHex() ? ' em' : '') + (m.envMap ? ' env' : '') + (m.lightMap ? ' lm' : ''); mt[k] = (mt[k] || 0) + 1; } }); const hs = []; scene.traverse(o => { if (o.isHemisphereLight) hs.push([o.parent && o.parent.type, o.intensity, o.color.getHexString(), scene.children.indexOf(o)]); }); return { hs, L, env: !!scene.environment, fog: scene.fog && scene.fog.type, mt }; }; window.__wpn = () => ({ ready: WPN.ready, cur: !!WPN.cur }); window.__camdbg = () => ({ parent: camera.parent && camera.parent.type, kids: camera.children.length, vis: camera.children.map(c => c.visible), near: camera.near }); window.__game = k => openGame(k === 'arc' ? ARC : k === 'bj' ? CARDS.bj : k === 'sol' ? CARDS.sol : k === 'wb' ? WB : MENU); window.__key = (code, down) => GM.active && GM.active.key && GM.active.key({ code, preventDefault() { } }, down); window.__fakeSit = (id) => { const s = SEATS[id], r = makeRemote('zitter' + id, 2, null); r.name = 'Collega'; setTag(r); r.pos = { x: s.x, y: 0, z: s.z }; r.tgt = { x: s.x, y: 0, z: s.z, yaw: s.yaw, sp: 0, seat: id }; r.yaw = s.yaw; }; window.__seats = () => SEATS.map(s => ({ id: s.id, kind: s.kind, x: s.x, z: s.z, yaw: s.yaw })); window.__sitState = () => ({ seat: SIT.seat ? SIT.seat.id : -1, phase: SIT.phase, mode: SIT.mode, w: +seatW(myAvatar).toFixed(2) });
 window.__cam = camera;
 window.__fake = (n) => { for (let i = 0; i < n; i++) { const r = makeRemote('fake' + i, (i + 1) % AVATARS.length, null); r.name = AVATARS[(i + 1) % AVATARS.length].label; r.color = ['#3b82f6', '#e11d48', '#16a34a', '#d97706', '#7c3aed', '#0891b2'][i % 6]; setTag(r); const cx = 8 + Math.cos(i) * 2, cz = 7 + Math.sin(i) * 2.2; let t = i; r.pos = { x: cx, y: 0, z: cz }; r.fake = (dt) => { t += dt * .35; r.tgt = { x: cx + Math.cos(t) * 1.2 * (i % 2 ? 1 : 0), y: 0, z: cz + Math.sin(t) * 1.2 * (i % 2 ? 1 : 0), yaw: i % 2 ? -t : i * .9 + 2.6, sp: i % 2 ? 1.5 : 0 }; }; if (i === 2) showBubble(r, 'Goeiemorgen! Koffie iemand?'); if (i === 4) r.avatar.userData.wave(); } renderOnline(); };
 window.__info = () => { let t = 0; scene.traverse(o => { if (o.isMesh && o.geometry) { const n = (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; t += o.isInstancedMesh ? n * o.count : n; } }); return { tris: Math.round(t), draws: renderer.info.render.calls }; };
@@ -2780,12 +2780,53 @@ const NIGHT = (() => {
     const gr = g.createRadialGradient(32, 100, 2, 32, 82, 62); gr.addColorStop(0, 'rgba(255,248,210,1)'); gr.addColorStop(.25, 'rgba(255,186,60,.95)'); gr.addColorStop(.6, 'rgba(235,80,15,.55)'); gr.addColorStop(1, 'rgba(110,15,0,0)');
     g.fillStyle = gr; g.beginPath(); g.moveTo(32, 2); g.bezierCurveTo(60, 50, 62, 104, 32, 126); g.bezierCurveTo(2, 104, 4, 50, 32, 2); g.fill(); }) });
   const smokeMat = new THREE.SpriteMaterial({ depthWrite: false, transparent: true, opacity: .32, map: cv(64, 64, (g) => { const gr = g.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, 'rgba(40,38,36,.9)'); gr.addColorStop(1, 'rgba(40,38,36,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }) });
+  // vuur: vlammen uit ruis (shader op een plaat die naar de camera draait), vonken en rook
+  const fireMat = new THREE.ShaderMaterial({ uniforms: { t: { value: 0 }, seed: { value: 0 }, amp: { value: 1 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float t; uniform float seed; uniform float amp; varying vec2 vUv;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hash(i), hash(i + vec2(1., 0.)), f.x), mix(hash(i + vec2(0., 1.)), hash(i + vec2(1., 1.)), f.x), f.y); }
+      float fbm(vec2 p){ float v = 0., a = .5; for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + 1.7; a *= .5; } return v; }
+      void main(){ vec2 uv = vUv; float y = uv.y;
+        float sway = (fbm(vec2(y * 2. + seed, t * .8)) - .5) * .35 * y;
+        float w = .5 - abs(uv.x - .5 - sway);
+        float n = fbm(vec2((uv.x - sway) * 3.5 + seed, y * 2.6 - t * 2.3)), n2 = fbm(vec2(uv.x * 9. - seed, y * 7. - t * 4.2));
+        float body = smoothstep(0., .42, w * (1.75 - y * 1.45));
+        float f = body * (n * 1.25 + n2 * .4) - y * .7 + (1. - smoothstep(0., .12, y)) * .25;
+        f = smoothstep(.16, .78, f) * amp;
+        vec3 col = mix(vec3(.45, .03, .0), vec3(1., .38, .03), smoothstep(.0, .45, f)); col = mix(col, vec3(1., .85, .55), smoothstep(.6, 1., f));
+        gl_FragColor = vec4(col * f * 1.9, f); }` });
+  const fireGeo = new THREE.PlaneGeometry(1, 1.7); fireGeo.translate(0, .8, 0);
+  const emberMat = new THREE.PointsMaterial({ color: '#ffb257', size: .022, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
   const FIRES = [];
   function fire(x, y, z, s = 1) {
-    const g = new THREE.Group(); g.position.set(x, y, z);
-    for (let i = 0; i < 6; i++) { const sp = new THREE.Sprite(flameMat); Object.assign(sp.userData, { ph: Math.random() * 10, ox: (Math.random() - .5) * .3 * s, oz: (Math.random() - .5) * .3 * s, s: s * (.3 + Math.random() * .3) }); g.add(sp); }
-    for (let i = 0; i < 4; i++) { const sp = new THREE.Sprite(smokeMat); Object.assign(sp.userData, { smoke: true, ph: Math.random(), s: s * (.6 + Math.random() * .5) }); g.add(sp); }
-    PROPS.add(g); FIRES.push(g);
+    const g = new THREE.Group(); g.position.set(x, y, z); g.userData.s = s;
+    for (let i = 0; i < 2; i++) { const m = new THREE.Mesh(fireGeo, fireMat.clone()); m.material.uniforms.seed.value = Math.random() * 50; m.scale.set(s * (i ? .7 : 1), s * (i ? .85 : 1), 1); m.position.set((i - .5) * .12 * s, 0, (i - .5) * .1 * s); m.userData.flame = true; m.renderOrder = 5; g.add(m); }
+    const n = 22, pos = new Float32Array(n * 3), life = new Float32Array(n); for (let k = 0; k < n; k++) life[k] = Math.random();
+    const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); const em = new THREE.Points(eg, emberMat); em.userData.ember = { life, n, s }; em.frustumCulled = false; g.add(em);
+    for (let i = 0; i < 5; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeMat.map, depthWrite: false, transparent: true, color: '#3a3836' })); Object.assign(sp.userData, { smoke: true, ph: i / 5, s: s * (.7 + Math.random() * .5) }); g.add(sp); }
+    PROPS.add(g); FIRES.push(g); return g;
+  }
+  // olieton: gedeukt, roest en afgebladderde verf, ringen, rand, verkoold hout en gloeiende kolen
+  const rustTex = cv(512, 256, (g, w, h) => {
+    g.fillStyle = '#4c2416'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 70; i++) { g.fillStyle = Math.random() < .35 ? 'rgba(40,52,62,.85)' : `rgba(${110 + Math.random() * 60 | 0},${45 + Math.random() * 30 | 0},${20 + Math.random() * 15 | 0},.55)`; g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 10 + Math.random() * 50, 6 + Math.random() * 30, Math.random() * 3, 0, 7); g.fill(); }
+    for (let i = 0; i < 90; i++) { const x = Math.random() * w, y = Math.random() * h * .6; g.fillStyle = `rgba(${70 + Math.random() * 40 | 0},25,10,.45)`; g.fillRect(x, y, 1 + Math.random() * 3, 20 + Math.random() * 90); }
+    for (let i = 0; i < 1600; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '20,10,6' : '160,90,50'},${Math.random() * .35})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+    g.fillStyle = 'rgba(15,8,5,.6)'; g.fillRect(0, 0, w, 14);   // verbrande bovenrand
+  });
+  rustTex.wrapS = THREE.RepeatWrapping;
+  const rustM = std('#ffffff', .88, { map: rustTex, metalness: .35, bumpMap: rustTex, bumpScale: .6, side: THREE.DoubleSide }), coalM = new THREE.MeshBasicMaterial({ color: '#ff5a10' }), charM = std('#141110', .95);
+  function barrel(x, y, z, rx = 0, ry = 0, burning = false) {
+    const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.set(rx, ry, 0);
+    const geo = new THREE.CylinderGeometry(.29, .29, .88, 28, 10, true), p = geo.attributes.position; const dents = [0, 1, 2].map(() => [Math.random() * 6.3, (Math.random() - .5) * .7, .02 + Math.random() * .04]);
+    for (let k = 0; k < p.count; k++) { const vx = p.getX(k), vy = p.getY(k), vz = p.getZ(k), a = Math.atan2(vz, vx); let r = 1; for (const [da, dy, dd] of dents) { const e = Math.exp(-((a - da) ** 2) * 8 - ((vy - dy) ** 2) * 18); r -= e * dd / .29; } p.setXYZ(k, vx * r, vy, vz * r); }
+    geo.computeVertexNormals(); const body = new THREE.Mesh(geo, rustM); body.position.y = .44; body.castShadow = body.receiveShadow = true; g.add(body);
+    for (const yy of [.29, .59, .87]) { const t = new THREE.Mesh(new THREE.TorusGeometry(.293, .014, 6, 32), rustM); t.rotation.x = Math.PI / 2; t.position.y = yy; g.add(t); }
+    const bot = new THREE.Mesh(new THREE.CircleGeometry(.29, 24), charM); bot.rotation.x = -Math.PI / 2; bot.position.y = .02; g.add(bot);
+    if (burning) { const c = new THREE.Mesh(new THREE.CircleGeometry(.27, 20), coalM); c.rotation.x = -Math.PI / 2; c.position.y = .66; g.add(c);
+      for (let k = 0; k < 6; k++) { const w = new THREE.Mesh(new THREE.BoxGeometry(.06, .06, .5), charM); w.position.set((Math.random() - .5) * .25, .72 + Math.random() * .12, (Math.random() - .5) * .2); w.rotation.set(Math.random() * .6, Math.random() * 3, Math.random() * .6); g.add(w); } }
+    PROPS.add(g); return g;
   }
   const P3 = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; PROPS.add(m); return m; };
   const burnt = std('#1d1b1a', .9), rust = std('#6b2a1c', .8, { metalness: .3 }), crate = std('#5b4330', .9), brick = std('#8a4a36', .95), tyre = std('#141414', .9), metal = std('#3c3f43', .5, { metalness: .5 }), plank = std('#4a3a2c', .95);
@@ -2795,7 +2836,7 @@ const NIGHT = (() => {
     P3(new THREE.BoxGeometry(1.7, .7, 3.9), burnt, xc, y0 + .55, 16.4, .05, .3, .12); P3(new THREE.BoxGeometry(1.4, .5, 1.9), burnt, xc - .05, y0 + 1.1, 16.5, .05, .3, .12);   // auto
     for (const [dz, dx] of [[-1.3, -.7], [1.2, -.75], [-1.2, .75], [1.35, .7]]) P3(new THREE.TorusGeometry(.3, .11, 8, 14), tyre, xc + dx, y0 + .3, 16.4 + dz, 0, Math.PI / 2 + .3, 0);
     for (let i = 0; i < 9; i++) { const z = 13.8 + Math.random() * 7, s = .4 + Math.random() * .4; P3(new THREE.BoxGeometry(s, s * .8, s), crate, xc + (Math.random() - .5) * 1.4, y0 + s * .4 + (Math.random() < .3 ? .4 : 0), z, Math.random() * .4, Math.random() * 3, Math.random() * .4); }
-    for (const z of [14.3, 19.6, 20.4]) P3(new THREE.CylinderGeometry(.28, .28, .85, 14), rust, xc + (Math.random() - .5) * .8, y0 + .42, z, Math.random() < .5 ? Math.PI / 2 : 0, Math.random() * 3, 0);
+    for (const z of [14.3, 19.6, 20.4]) { const tip = Math.random() < .5; barrel(xc + (Math.random() - .5) * .8, y0 + (tip ? .29 : 0), z, tip ? Math.PI / 2 : 0, Math.random() * 3); }
     for (let i = 0; i < 40; i++) P3(new THREE.BoxGeometry(.21, .065, .1), brick, xc + (Math.random() - .5) * 2.2, y0 + .04 + Math.random() * .3, 13.7 + Math.random() * 7.2, Math.random(), Math.random() * 3, Math.random());
     for (let i = 0; i < 6; i++) P3(new THREE.BoxGeometry(.12, .04, 1.8), plank, xc + (Math.random() - .5) * 1.2, y0 + .5 + Math.random() * .6, 14 + Math.random() * 6.5, Math.random() * .8 - .4, Math.random() * 3, Math.random() * .8 - .4);
     fire(xc - .1, y0 + 1.3, 16.6, 1.6); fire(xc + .3, y0 + .9, 14.4, 1.1); fire(xc - .2, y0 + .9, 19.7, 1.2);
@@ -2804,7 +2845,7 @@ const NIGHT = (() => {
   pile(-4.9); pile(21.0);
   N.PILES = [{ name: 'puin west', x: -4.2, z: 17.2, sx: -3.6, sz: 17.2 }, { name: 'puin oost', x: 20.3, z: 17.2, sx: 19.7, sz: 17.2 }];
   // brandend vat in de koer
-  P3(new THREE.CylinderGeometry(.28, .28, .85, 14, 1, true), rust, 12.5, .42, -1.0); fire(12.5, .85, -1.0, .9); colliders.push({ x1: 12.2, x2: 12.8, z1: -1.3, z2: -.7, on: () => N.on });
+  barrel(12.5, 0, -1.0, 0, .4, true); fire(12.5, .68, -1.0, .75); colliders.push({ x1: 12.2, x2: 12.8, z1: -1.3, z2: -.7, on: () => N.on });
   // bloedvlekken op de vloer en uitgesmeerde handen op muren
   const bloodTex = cv(256, 256, (g, w, h) => {
     const blob = (x, y, r) => { g.beginPath(); for (let i = 0; i <= 20; i++) { const a = i / 20 * 6.283, rr = r * (.7 + Math.random() * .5); g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.fill(); };
@@ -2884,6 +2925,7 @@ const NIGHT = (() => {
     for (const L of N.lights) { scene.remove(L.l, L.bulb); L.bulb.geometry.dispose(); L.bulb.material.dispose(); L.l.dispose(); } N.lights = [];
     camera.remove(torch, tt); torch.intensity = 0; holes.visible = false; PROPS.visible = false; for (const sc of SCR) { if (sc.map) sc.m.map = sc.map; sc.m.color.setScalar(1); sc.m.needsUpdate = true; } TIP.forEach(t => { t.chair.rotation.z = 0; }); stopDrone(); SHADOW.force = true;
   };
+  const _fp = new THREE.Vector3();
   N.update = dt => {
     if (!N.on) return; N.t += dt;
     for (const L of N.lights) {
@@ -2895,9 +2937,11 @@ const NIGHT = (() => {
       L.l.intensity = L.I * 1.5 * f; L.bulb.material.color.set(L.l.color).multiplyScalar(.15 + .85 * f);
     }
     torch.intensity = 5.5 * (Math.random() < .004 ? .2 : 1);
-    for (const g of FIRES) for (const sp of g.children) { const u = sp.userData, s = u.s;
-      if (u.smoke) { const t = (N.t * .3 + u.ph) % 1; sp.position.set(Math.sin(N.t + u.ph * 9) * .15 * t, .3 + t * 2.4 * s, 0); sp.scale.setScalar(s * (.4 + t * 1.6)); }
-      else { const k = Math.sin(N.t * 9 + u.ph) * .5 + .5, j = Math.random() * .15; sp.scale.set(s * (.6 + .3 * k), s * (1.1 + .5 * k + j), 1); sp.position.set(u.ox, s * .45 * (1 + .2 * k), u.oz); } }
+    for (const g of FIRES) { const s = g.userData.s; g.getWorldPosition(_fp); const yaw = Math.atan2(camera.position.x - _fp.x, camera.position.z - _fp.z);
+      for (const c of g.children) { const u = c.userData;
+        if (u.flame) { c.rotation.y = yaw - g.parent.rotation.y; c.material.uniforms.t.value = N.t; c.material.uniforms.amp.value = .9 + Math.sin(N.t * 13 + c.material.uniforms.seed.value) * .05 + Math.random() * .08; }
+        else if (u.ember) { const e = u.ember, a = c.geometry.attributes.position; for (let k = 0; k < e.n; k++) { e.life[k] += dt * (.35 + (k % 5) * .06); if (e.life[k] > 1) e.life[k] = 0; const l = e.life[k]; a.setXYZ(k, Math.sin(k * 7.3 + N.t * 1.3) * .25 * e.s * l + (k % 3 - 1) * .05, .1 + l * 2.2 * e.s, Math.cos(k * 4.1 + N.t) * .2 * e.s * l); } a.needsUpdate = true; }
+        else if (u.smoke) { const t = (N.t * .22 + u.ph) % 1; c.position.set(Math.sin(N.t * .7 + u.ph * 9) * .25 * t, 1.1 * s + t * 3.2 * s, 0); c.scale.setScalar(s * (.5 + t * 2.2)); c.material.opacity = .42 * Math.sin(Math.PI * t); } } }
     for (const G of glitch) { G.tm -= dt; if (G.tm <= 0) { G.tm = 2 + Math.random() * 4; G.mode = Math.random() * 8 | 0; G.cam = 1 + Math.random() * 8 | 0; } }
     N.gT = (N.gT || 0) - dt; if (N.gT <= 0) { N.gT = .09; glitch.forEach(drawGlitch); }
     for (const sc of SCR) { const f = Math.random() < .06 ? .15 : .7 + Math.random() * .3; sc.m.color.setScalar(f); }
@@ -2918,11 +2962,27 @@ const ZB = (() => {
     for (const b of NIGHT.BREACH) { const i0 = Math.max(0, Math.floor((b.x1 - G.x0) / G.s)), i1 = Math.min(G.w - 1, Math.floor((b.x2 - G.x0) / G.s)), j0 = Math.max(0, Math.floor((b.z1 - G.z0) / G.s)), j1 = Math.min(G.h - 1, Math.floor((b.z2 - G.z0) / G.s)); for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * G.w + i; if (G.block[k]) G.br[k] = 1; G.block[k] = 0; } }
   }
   const cell = (x, z) => [Math.floor((x - G.x0) / G.s), Math.floor((z - G.z0) / G.s)];
-  function flow() {
-    G.dist.fill(1e9); const [pi, pj] = cell(P.x, P.z); if (pi < 0 || pj < 0 || pi >= G.w || pj >= G.h) return;
-    const q = new Int32Array(G.w * G.h); let h = 0, t = 0; const k0 = pj * G.w + pi; G.dist[k0] = 0; q[t++] = k0;
-    while (h < t) { const k = q[h++], i = k % G.w, j = (k / G.w) | 0, d = G.dist[k];
-      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const nk = nj * G.w + ni; if (G.block[nk]) continue; if (di && dj && (G.block[j * G.w + ni] || G.block[nj * G.w + i])) continue; const nd = d + (di && dj ? 1.414 : 1); if (nd < G.dist[nk]) { G.dist[nk] = nd; q[t++] = nk; } } }
+  function flow() {   // kortste afstand tot de speler voor elke vrije cel (label-correcting met ringbuffer: geen cel valt weg)
+    const N = G.w * G.h; G.dist.fill(1e9); const [pi, pj] = cell(P.x, P.z); if (pi < 0 || pj < 0 || pi >= G.w || pj >= G.h) return;
+    const q = G.q || (G.q = new Int32Array(N)), inq = G.inq || (G.inq = new Uint8Array(N)); inq.fill(0);
+    let h = 0, t = 0; const push = k => { q[t] = k; t = (t + 1) % N; inq[k] = 1; };
+    const k0 = pj * G.w + pi; G.dist[k0] = 0; push(k0);
+    while (h !== t) { const k = q[h]; h = (h + 1) % N; inq[k] = 0; const i = k % G.w, j = (k / G.w) | 0, d = G.dist[k];
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const nk = nj * G.w + ni; if (G.block[nk]) continue; if (di && dj && (G.block[j * G.w + ni] || G.block[nj * G.w + i])) continue; const nd = d + (di && dj ? 1.414 : 1); if (nd < G.dist[nk] - 1e-6) { G.dist[nk] = nd; if (!inq[nk]) push(nk); } } }
+  }
+  const freeAt = (x, z) => { const i = Math.floor((x - G.x0) / G.s), j = Math.floor((z - G.z0) / G.s); return i >= 0 && j >= 0 && i < G.w && j < G.h && !G.block[j * G.w + i]; };
+  function seeLine(x0, z0, x1, z1) { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(L / .08)); for (let k = 1; k <= n; k++) { const t = k / n; if (!freeAt(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return false; } return true; }
+  // stuurpunt: volg het afstandsveld tot 12 cellen vooruit en mik op de verste cel die je vrij ziet (geen hoeken afsnijden, niet tegen muren duwen)
+  function steer(z) {
+    if (seeLine(z.x, z.z, P.x, P.z)) return [P.x, P.z];
+    let [ci, cj] = cell(z.x, z.z); if (ci < 0 || cj < 0 || ci >= G.w || cj >= G.h) return [P.x, P.z];
+    let bd = G.dist[cj * G.w + ci];
+    if (bd >= 1e8) { let bi = -1, bj = -1; for (let R = 1; R <= 4 && bi < 0; R++) for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const v = G.dist[nj * G.w + ni]; if (v < bd) { bd = v; bi = ni; bj = nj; } } if (bi < 0) return [P.x, P.z]; ci = bi; cj = bj; }
+    const chain = [[ci, cj]];
+    for (let s = 0; s < 12; s++) { let bi = ci, bj = cj, b = G.dist[cj * G.w + ci]; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ni = ci + di, nj = cj + dj; if ((!di && !dj) || ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; if (di && dj && (G.block[cj * G.w + ni] || G.block[nj * G.w + ci])) continue; const v = G.dist[nj * G.w + ni]; if (v < b - 1e-6) { b = v; bi = ni; bj = nj; } } if (bi === ci && bj === cj) break; ci = bi; cj = bj; chain.push([ci, cj]); }
+    const c = (i, j) => [G.x0 + (i + .5) * G.s, G.z0 + (j + .5) * G.s];
+    for (let k = chain.length - 1; k >= 1; k--) { const [x, zz] = c(...chain[k]); if (seeLine(z.x, z.z, x, zz)) return [x, zz]; }
+    return c(...chain[Math.min(1, chain.length - 1)]);
   }
   // ── wapen voor de camera
   const gun = new THREE.Group(); gun.visible = false; scene.add(camera); camera.add(gun);
@@ -2940,6 +3000,7 @@ const ZB = (() => {
     const pool = Z.mode === 'story' ? SPAWNS.filter(p => Z.zones.has(p.zone)) : SPAWNS, sp = pool[Math.random() * pool.length | 0], sx = sp.x, sz = sp.z, big = Z.wave >= 5 && Math.random() < .12, fast = Z.wave >= 3 && Math.random() < .25 + Z.wave * .02;
     const z = { x: sx + (Math.random() - .5) * .6, z: sz + (Math.random() - .5) * .6, yaw: 0, hp: (2 + Math.floor(Z.wave / 2)) * (big ? 3 : 1), sp: (fast ? 1.35 : .62 + Z.wave * .05) * (big ? .8 : 1), fast, big, atk: 0, atkT: 0, hitT: 0, dead: 0, flash: 0, tinted: false };
     if (sp.hole) { z.x = sp.hole.x + (sx - sp.hole.x) * .15; z.z = sp.hole.z + (sz - sp.hole.z) * .15; z.crawl = 1.6; z.cx = sx; z.cz = sz; z.yaw = Math.atan2(-(sx - sp.hole.x), -(sz - sp.hole.z)); }   // kruipt uit het gat
+    if (Z.mode === 'story') { z.hp = Math.ceil(z.hp * 1.4); z.sp *= 1.08; if (Z.planted && Math.random() < .25) { z.fast = true; z.sp = 1.4; } }
     z.av = zombieBody(z); if (big) z.av.scale.setScalar(1.25); scene.add(z.av); Z.list.push(z);
   }
   const ZFACE = Math.PI;
@@ -3085,26 +3146,28 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   const boomL = new THREE.PointLight('#ffffff', 0, 14, 1.6);
   // ── VERHAALMODUS: deuren kopen, drie onderdelen zoeken, de bom bouwen en aan de garagepoort laten ontploffen
   const LOCKS = [
-    { names: ['terrasdeur'], zone: 'kantoor', price: 500, nl: 'Terrasdeur', en: 'Patio door' },
-    { names: ['achterdeur'], zone: 'kantoor', price: 500, nl: 'Achterdeur', en: 'Back door' },
-    { names: ['buitendeur Bureau Stijn'], zone: 'stijn', price: 750, nl: 'Buitendeur Bureau Stijn', en: "Stijn's office door" },
-    { names: ['deur Bureau Stijn'], zone: 'stijn', price: 750, nl: 'Deur Bureau Stijn', en: "Stijn's office door" },
-    { names: ['kastdeur techniek'], zone: 'techniek', price: 1000, nl: 'Technische ruimte', en: 'Utility room' },
-    { names: ['deur sanitair'], zone: 'sanitair', price: 750, nl: 'Sanitair', en: 'Restrooms' },
-    { names: ['voordeur'], zone: 'straat', price: 1250, nl: 'Voordeur', en: 'Front door' },
+    { names: ['terrasdeur'], zone: 'kantoor', price: 800, nl: 'Terrasdeur', en: 'Patio door' },
+    { names: ['achterdeur'], zone: 'kantoor', price: 800, nl: 'Achterdeur', en: 'Back door' },
+    { names: ['buitendeur Bureau Stijn'], zone: 'stijn', price: 1250, nl: 'Buitendeur Bureau Stijn', en: "Stijn's office door" },
+    { names: ['deur Bureau Stijn'], zone: 'stijn', price: 1250, nl: 'Deur Bureau Stijn', en: "Stijn's office door" },
+    { names: ['kastdeur techniek'], zone: 'techniek', price: 1750, nl: 'Technische ruimte', en: 'Utility room' },
+    { names: ['deur sanitair'], zone: 'sanitair', price: 1250, nl: 'Sanitair', en: 'Restrooms' },
+    { names: ['voordeur'], zone: 'straat', price: 2000, nl: 'Voordeur', en: 'Front door' },
   ];
   const PARTS = [
     { zone: 'stijn', x: 16.6, y: .78, z: 1.52, col: '#ffcf3a', nl: 'Ontsteker', en: 'Detonator' },
     { zone: 'techniek', x: 19.0, y: .05, z: 2.8, col: '#4dff6a', nl: 'Springlading', en: 'Explosive charge' },
     { zone: 'sanitair', x: -1.6, y: .05, z: 3.4, col: '#58c8ff', nl: 'Batterij', en: 'Battery pack' },
+    { zone: 'straat', x: 10.8, y: .05, z: 17.6, col: '#ff5ad8', nl: 'Bedrading', en: 'Wiring' },
   ];
-  const BENCH = { x: 7.85, z: 10.0 }, PLANT = { x: 25.0, z: -2.0 }, BOMB_T = 60;
+  const BENCH = { x: 7.85, z: 10.0 }, PLANT = { x: 25.0, z: -2.0 }, BOMB_T = 90;
   const glowMat = col => new THREE.SpriteMaterial({ color: col, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: .8, map: ctex(64, 64, (g) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }, 1) });
   function partMesh(p, i) {
     const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: p.col, emissive: p.col, emissiveIntensity: .8, roughness: .4, metalness: .3 });
     if (i === 0) { g.add(new THREE.Mesh(new THREE.BoxGeometry(.16, .07, .1), m)); const a = new THREE.Mesh(new THREE.CylinderGeometry(.006, .006, .14, 6), m); a.position.set(.05, .1, 0); g.add(a); }
     else if (i === 1) { for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, .24, 12), m); c.position.set((k - 1) * .085, .12, 0); g.add(c); } }
-    else { const b = new THREE.Mesh(new THREE.BoxGeometry(.22, .14, .12), m); b.position.y = .07; g.add(b); }
+    else if (i === 2) { const b = new THREE.Mesh(new THREE.BoxGeometry(.22, .14, .12), m); b.position.y = .07; g.add(b); }
+    else { for (let k = 0; k < 3; k++) { const t = new THREE.Mesh(new THREE.TorusGeometry(.09 - k * .015, .012, 6, 20), m); t.rotation.x = Math.PI / 2; t.position.y = .02 + k * .025; g.add(t); } }
     const s = new THREE.Sprite(glowMat(p.col)); s.scale.setScalar(.7); s.position.y = .12; g.add(s);
     g.position.set(p.x * WS, (groundAt(p.x, p.z) + p.y) * WS, p.z * WS); return g;
   }
@@ -3132,17 +3195,17 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     let t;
     if (Z.planted) t = TL('Overleef tot de bom ontploft: ', 'Survive until the bomb goes off: ') + '<b>' + fmt(Math.max(0, Z.bombT)) + '</b>';
     else if (Z.carry) t = TL('Plaats de bom aan de garagepoort', 'Plant the bomb at the garage gate');
-    else if (n === 3) t = TL('Bouw de bom aan de werkbank op het onthaalblok (inkom)', 'Build the bomb at the workbench on the reception desk');
-    else t = TL(`Zoek de onderdelen van de bom (${n}/3): ontsteker, springlading, batterij. Koop deuren open met je munten.`, `Find the bomb parts (${n}/3): detonator, explosive charge, battery pack. Buy doors open with your points.`);
+    else if (n === PARTS.length) t = TL('Bouw de bom aan de werkbank op het onthaalblok (inkom)', 'Build the bomb at the workbench on the reception desk');
+    else t = TL(`Zoek de onderdelen van de bom (${n}/${PARTS.length}): ontsteker, springlading, batterij en bedrading. Koop deuren open met je munten.`, `Find the bomb parts (${n}/${PARTS.length}): detonator, explosive charge, battery pack and wiring. Buy doors open with your points.`);
     o.innerHTML = `<small>${TL('Opdracht', 'Objective')}</small>` + t;
   }
   // wat kan je hier doen met E? (winkel, deur, onderdeel, werkbank, bom)
   function action() {
     for (const sh of SHOPS) if (Math.hypot(P.x - sh.x, P.z - sh.z) < 1.3 && (Z.mode !== 'story' || Z.zones.has(sh.zone))) return { txt: TL('winkel', 'Shop'), go: () => openShop(sh) };
     if (Z.mode !== 'story') return null;
-    for (let i = 0; i < PARTS.length; i++) { const p = PARTS[i]; if (!Z.parts.has(i) && Math.hypot(P.x - p.x, P.z - p.z) < 1.2) return { txt: TL(p.nl + ' oppakken', 'Pick up ' + p.en.toLowerCase()), go: () => { Z.parts.add(i); scene.remove(Z.partMeshes[i]); sfx(660, .12, 'triangle', .06); setTimeout(() => sfx(990, .2, 'triangle', .05), 120); say(TL(p.nl, p.en), TL(`onderdeel ${Z.parts.size}/3`, `part ${Z.parts.size}/3`), 2); objective(); } }; }
-    if (Z.parts.size === 3 && !Z.carry && !Z.planted && Math.hypot(P.x - BENCH.x, P.z - BENCH.z) < 1.4) return { txt: TL('bom bouwen', 'Build the bomb'), go: () => { Z.carry = true; noise(.4, .08); sfx(300, .4, 'square', .04, 300); say(TL('Bom gebouwd', 'Bomb built'), TL('breng hem naar de garagepoort', 'take it to the garage gate'), 2.5); objective(); } };
-    if (Z.carry && Math.hypot(P.x - PLANT.x, P.z - PLANT.z) < 1.6) return { txt: TL('bom plaatsen', 'Plant the bomb'), go: () => { Z.carry = false; Z.planted = true; Z.bombT = BOMB_T; bombMesh.position.set((PLANT.x + .9) * WS, groundAt(PLANT.x + .9, PLANT.z) * WS, PLANT.z * WS); scene.add(bombMesh); say(TL('Bom geplaatst', 'Bomb planted'), TL('hou het nog 60 seconden vol', 'hold out for 60 more seconds'), 3); objective(); } };
+    for (let i = 0; i < PARTS.length; i++) { const p = PARTS[i]; if (!Z.parts.has(i) && Math.hypot(P.x - p.x, P.z - p.z) < 1.2) return { txt: TL(p.nl + ' oppakken', 'Pick up ' + p.en.toLowerCase()), go: () => { Z.parts.add(i); scene.remove(Z.partMeshes[i]); sfx(660, .12, 'triangle', .06); setTimeout(() => sfx(990, .2, 'triangle', .05), 120); say(TL(p.nl, p.en), TL(`onderdeel ${Z.parts.size}/${PARTS.length}`, `part ${Z.parts.size}/${PARTS.length}`), 2); objective(); } }; }
+    if (Z.parts.size === PARTS.length && !Z.carry && !Z.planted && Math.hypot(P.x - BENCH.x, P.z - BENCH.z) < 1.4) return { txt: TL('bom bouwen', 'Build the bomb'), go: () => { Z.carry = true; noise(.4, .08); sfx(300, .4, 'square', .04, 300); say(TL('Bom gebouwd', 'Bomb built'), TL('breng hem naar de garagepoort', 'take it to the garage gate'), 2.5); objective(); } };
+    if (Z.carry && Math.hypot(P.x - PLANT.x, P.z - PLANT.z) < 1.6) return { txt: TL('bom plaatsen', 'Plant the bomb'), go: () => { Z.carry = false; Z.planted = true; Z.bombT = BOMB_T; bombMesh.position.set((PLANT.x + .9) * WS, groundAt(PLANT.x + .9, PLANT.z) * WS, PLANT.z * WS); scene.add(bombMesh); say(TL('Bom geplaatst', 'Bomb planted'), TL('hou het nog 90 seconden vol', 'hold out for 90 more seconds'), 3); objective(); } };
     const d = findDoor(); if (d && d.locked) { const l = lockFor(d); if (l) return { txt: TL(l.nl + ' openen', 'Open ' + l.en.replace(/^Stijn/, "Stijn")), price: l.price, go: () => unlock(l) }; }
     return null;
   }
@@ -3157,7 +3220,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
 <div class="grid"><div><h3>${TL('Bediening', 'Controls')}</h3><ul><li><kbd>WASD</kbd>${TL('lopen', 'move')} · <kbd>Shift</kbd>${TL('sneller', 'sprint')}</li><li><kbd>${TL('klik', 'click')}</kbd>${TL('schieten / slaan', 'shoot / swing')}</li><li><kbd>R</kbd>${TL('herladen', 'reload')} · <kbd>1</kbd>–<kbd>4</kbd>${TL('wapens', 'weapons')}</li><li><kbd>G</kbd>flashbang · <kbd>H</kbd>${TL('verband', 'medkit')}</li><li><kbd>E</kbd>${TL('winkel, deuren, onderdelen', 'shop, doors, parts')}</li><li><kbd>Backspace</kbd>${TL('stoppen', 'quit')}</li></ul></div>
 <div><h3>${TL('Munten en winkel', 'Points and shop')}</h3><ul><li>${TL('Zombies leveren munten op, hoofdschoten meer', 'Zombies give points, headshots more')}</li><li>${TL('Winkels: keukeneiland en picknicktafel in de koer', 'Shops: kitchen island and the courtyard picnic table')}</li><li>${TL('Kogels zijn beperkt: koop bij of gebruik de knuppel', 'Ammo is limited: buy more or use the bat')}</li><li>${TL('Het spel pauzeert terwijl je winkelt', 'The game pauses while you shop')}</li></ul></div></div>
 <div class="load"><i id="zml"></i></div><div class="row" style="margin-top:8px"><span class="st" id="zms">${TL('laden…', 'loading…')}</span></div>
-<div class="modes"><button class="mode" id="zmb" disabled><b>${TL('Eindeloos', 'Endless')}</b>${TL('Alles is open. Overleef zo veel mogelijk golven.', 'Everything is open. Survive as many rounds as you can.')}</button><button class="mode" id="zms2" disabled><b>${TL('Verhaal', 'Story')}</b>${TL('Je begint in de koer. Koop deuren open, zoek 3 onderdelen, bouw de bom en blaas alle zombies op.', 'You start in the courtyard. Buy doors open, find 3 parts, build the bomb and blow up every zombie.')}</button></div></div>`;
+<div class="modes"><button class="mode" id="zmb" disabled><b>${TL('Eindeloos', 'Endless')}</b>${TL('Alles is open. Overleef zo veel mogelijk golven.', 'Everything is open. Survive as many rounds as you can.')}</button><button class="mode" id="zms2" disabled><b>${TL('Verhaal', 'Story')}</b>${TL('Je begint in de koer. Koop deuren open, zoek 4 onderdelen, bouw de bom en blaas alle zombies op.', 'You start in the courtyard. Buy doors open, find 4 parts, build the bomb and blow up every zombie.')}</button></div></div>`;
   }
   function menu() {
     const m = document.createElement('div'); m.id = 'zmenu'; document.body.appendChild(m);
@@ -3275,7 +3338,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
   }
   function reload() { if (GUNS[Z.gun].melee) return; const w = inv(); if (Z.reloadT > 0 || w.ammo >= GUNS[Z.gun].mag || w.res <= 0) { if (w.res <= 0 && w.ammo === 0) say(TL('Geen kogels meer', 'No ammo left'), TL('koop kogels of wissel van wapen', 'buy ammo or switch weapons'), 2); return; } Z.reloadT = WPN.ready && WPN.cur ? WPN.play('reload', 1.9) : 1.4; sfx(300, .05); setTimeout(() => sfx(420, .05), 500); setHud(); }
   function finishReload() { const w = inv(), need = GUNS[Z.gun].mag - w.ammo, take = Math.min(need, w.res); w.ammo += take; if (w.res !== Infinity) w.res -= take; setHud(); }
-  function kill(z, head) { z.dead = 1e-3; Z.kills++; const base = Z.mode === 'story' ? 25 : 10, c = (base + (head ? Math.round(base * .5) : 0)) * (z.big ? 3 : 1); Z.coins += c; pop(c); Z.score += Math.round(c * (1 + Z.wave * .25)); sfx(140, .4, 'sawtooth', .05, -80); setHud(); }
+  function kill(z, head) { z.dead = 1e-3; Z.kills++; const base = Z.mode === 'story' ? 20 : 10, c = (base + (head ? Math.round(base * .5) : 0)) * (z.big ? 3 : 1); Z.coins += c; pop(c); Z.score += Math.round(c * (1 + Z.wave * .25)); sfx(140, .4, 'sawtooth', .05, -80); setHud(); }
   // ── flashbang en verband
   function throwFlash() {
     if (Z.flash <= 0) { say(TL('Geen flashbangs', 'No flashbangs'), TL('te koop in de winkel', 'buy them at a shop'), 1.5); return; } Z.flash--; setHud();
@@ -3328,8 +3391,8 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
     gun.position.set(.17, -.15 + Math.sin(performance.now() / 300) * .003 * Math.min(1, mySpeed), -.36 + Z.kick * .04); gun.rotation.x = Z.kick * .12 + (Z.reloadT > 0 ? .6 : 0); rifle.forEach(m => m.visible = Z.gun === 'geweer');
     // golven
     const alive = Z.list.filter(z => !z.dead).length;
-    if (!Z.toSpawn && !alive) { Z.between -= dt; if (Z.between <= 0) { Z.wave++; Z.toSpawn = 3 + Z.wave * 3; Z.between = 4; if (Z.wave > 1) { Z.score += Z.wave * 25; Z.coins += Z.mode === 'story' ? 50 + Z.wave * 10 : 20 + Z.wave * 5; } if (Z.wave === 2) say(TL('Golf 2', 'Round 2'), TL('kogels en meer: winkel in de koer en de keuken (E)', 'ammo and more: shops in the courtyard and kitchen (E)')); else say(TL('Golf ', 'Round ') + Z.wave, Z.wave >= 5 ? TL('er lopen ook grote zombies rond', 'big zombies are roaming too') : Z.wave >= 3 ? TL('sommige zombies lopen hard', 'some zombies are running') : ''); setHud(); } }
-    if (Z.toSpawn > 0 && alive < 10) { Z.spawnT -= dt; if (Z.spawnT <= 0) { spawn(); Z.toSpawn--; Z.spawnT = Math.max(.45, 1.6 - Z.wave * .1) * (Z.planted ? .5 : 1); setHud(); } }
+    if (!Z.toSpawn && !alive) { Z.between -= dt; if (Z.between <= 0) { Z.wave++; Z.toSpawn = 3 + Z.wave * 3; Z.between = 4; if (Z.wave > 1) { Z.score += Z.wave * 25; Z.coins += Z.mode === 'story' ? 40 + Z.wave * 8 : 20 + Z.wave * 5; } if (Z.wave === 2) say(TL('Golf 2', 'Round 2'), TL('kogels en meer: winkel in de koer en de keuken (E)', 'ammo and more: shops in the courtyard and kitchen (E)')); else say(TL('Golf ', 'Round ') + Z.wave, Z.wave >= 5 ? TL('er lopen ook grote zombies rond', 'big zombies are roaming too') : Z.wave >= 3 ? TL('sommige zombies lopen hard', 'some zombies are running') : ''); setHud(); } }
+    if (Z.toSpawn > 0 && alive < (Z.planted ? 16 : Z.mode === 'story' ? 12 : 10)) { Z.spawnT -= dt; if (Z.spawnT <= 0) { spawn(); Z.toSpawn--; Z.spawnT = Math.max(.4, 1.6 - Z.wave * .1) * (Z.planted ? .4 : 1); setHud(); } }
     Z.gridT -= dt; if (Z.gridT <= 0) { flow(); Z.gridT = .3; }
     // flashbangs: boog, stuiteren op de vloer, ontploffen na 1,2 s
     for (const n of Z.nades) { n.v.y -= 9.8 * dt; const p0 = n.m.position.clone(); n.m.position.addScaledVector(n.v, dt); n.m.rotation.x += dt * 9;
@@ -3359,7 +3422,7 @@ body.zbmode #map{top:16px!important;bottom:auto!important;filter:sepia(.4) hue-r
         z.stun -= dt; av.rotation.x = 0; av.rotation.z = Math.sin(performance.now() / 180 + z.x) * .06; if (real) { zplay(z, 'idle2', .2, .6); z.mx.update(dt); } z.flash -= dt; continue;
       } else av.rotation.z = 0;
       let tx = P.x, tz = P.z; const [ci, cj] = cell(z.x, z.z), dP = Math.hypot(P.x - z.x, P.z - z.z);
-      if (dP > .9 && ci >= 0 && cj >= 0 && ci < G.w && cj < G.h) { let bd = G.dist[cj * G.w + ci], bi = ci, bj = cj; const RR = bd < 1e8 ? 1 : 3; for (let dj = -RR; dj <= RR; dj++) for (let di = -RR; di <= RR; di++) {   /* eigen cel dicht (te dicht bij een muur)? zoek de beste cel in de buurt */ const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= G.w || nj >= G.h) continue; const v = G.dist[nj * G.w + ni]; if (v < bd) { bd = v; bi = ni; bj = nj; } } tx = G.x0 + (bi + .5) * G.s; tz = G.z0 + (bj + .5) * G.s; }
+      z.stT = (z.stT || 0) - dt; if (z.stT <= 0 || !z.tg) { z.tg = dP > .9 ? steer(z) : [P.x, P.z]; z.stT = .15; } tx = z.tg[0]; tz = z.tg[1];
       let vx = tx - z.x, vz = tz - z.z; const vl = Math.hypot(vx, vz) || 1; vx /= vl; vz /= vl;
       z.chk = (z.chk || 0) - dt; if (z.chk <= 0) { if (z.lx !== undefined && dP > 1.0 && Math.hypot(z.x - z.lx, z.z - z.lz) < .12 && !(z.atkT > 0)) { const sd = Math.random() < .5 ? 1 : -1; z.ux = -vz * sd; z.uz = vx * sd; z.unst = .7; } z.lx = z.x; z.lz = z.z; z.chk = 1.2; }
       if (z.unst > 0) { z.unst -= dt; vx = vx * .3 + z.ux; vz = vz * .3 + z.uz; }   // vastgelopen: even opzij
